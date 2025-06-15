@@ -18,6 +18,16 @@
 #include "simpobj.h"
 #include "iparamm2.h"
 
+// Helper function for debug output
+void DebugOutput(const TCHAR* format, ...) {
+    TCHAR buffer[1024];
+    va_list args;
+    va_start(args, format);
+    _vstprintf_s(buffer, format, args);
+    va_end(args);
+    OutputDebugString(buffer);
+}
+
 // The unique Class_ID of this modifier
 #define CASAVISTA_CID Class_ID(0x123456, 0x123456)
 
@@ -74,6 +84,10 @@ public:
 
     void SetClassProperty(INode* node, const TCHAR* className);
     const TCHAR* GetClassProperty(INode* node);
+
+    // Override GetParamBlock to match base class
+    IParamBlock2* GetParamBlock(int i) override { return pblock2; }
+    int NumParamBlocks() override { return 1; }
 
 public:
     static IObjParam* ip; 
@@ -144,6 +158,11 @@ ParamBlockDesc2 casavista_param_blk(
 CasavistaMod::CasavistaMod() : pblock2(NULL) {
     CasavistaDesc.MakeAutoParamBlocks(this);
     assert(pblock2);
+
+    // Initialize the parameter block with default value
+    if (pblock2) {
+        pblock2->SetValue(casavista_class, 0, _T("None"));
+    }
 }
 
 CasavistaMod::~CasavistaMod() {
@@ -163,6 +182,19 @@ void CasavistaMod::BeginEditParams(IObjParam* ip, ULONG flags, Animatable* prev)
     editMod = this;
 
     SimpleMod2::BeginEditParams(ip, flags, prev);
+
+    // When the modifier is first applied, initialize the user properties
+    if (ip) {
+        INode* node = ip->GetSelNode(0);
+        if (node) {
+            // Clear any existing properties first
+            node->SetUserPropString(_T("CasavistaClass"), NULL);
+            
+            // Set initial values
+            node->SetUserPropString(_T("CasavistaClass"), _T("None"));
+            node->SetUserPropBool(_T("HasCasavistaMod"), TRUE);
+        }
+    }
 
     CasavistaDesc.BeginEditParams(ip, this, flags, prev);
 }
@@ -217,16 +249,27 @@ void CasavistaMod::InvalidateUI()
 void CasavistaMod::SetClassProperty(INode* node, const TCHAR* className)
 {
     if (node) {
-        node->SetUserPropString(_T("CasavistaClass"), className);
+        // Only update if the value is different
+        TSTR currentValue;
+        node->GetUserPropString(_T("CasavistaClass"), currentValue);
+        if (_tcscmp(currentValue, className) != 0) {
+            node->SetUserPropString(_T("CasavistaClass"), className);
+        }
     }
 }
 
 const TCHAR* CasavistaMod::GetClassProperty(INode* node)
 {
-    if (!node) return _T("None");
+    if (!node) {
+        return _T("None");
+    }
+
     static TSTR propValue;
     node->GetUserPropString(_T("CasavistaClass"), propValue);
+    
     if (propValue.isNull() || propValue.Length() == 0) {
+        // If property doesn't exist, initialize it
+        node->SetUserPropString(_T("CasavistaClass"), _T("None"));
         return _T("None");
     }
     return propValue.data();
@@ -293,6 +336,28 @@ INT_PTR CasavistaDlgProc::DlgProc(TimeValue t, IParamMap2* map, HWND hWnd, UINT 
             }
         }
         break;
+
+    case WM_COMMAND:
+        if (LOWORD(wParam) == IDC_CLASS_COMBO && HIWORD(wParam) == CBN_SELCHANGE) {
+            HWND hCombo = GetDlgItem(hWnd, IDC_CLASS_COMBO);
+            if (hCombo) {
+                int index = SendMessage(hCombo, CB_GETCURSEL, 0, 0);
+                if (index >= 0) {
+                    TCHAR buffer[256];
+                    SendMessage(hCombo, CB_GETLBTEXT, index, (LPARAM)buffer);
+                    
+                    // Update both the parameter block and user property
+                    if (mod && node) {
+                        mod->SetClassProperty(node, buffer);
+                        if (mod->GetParamBlock(0)) {
+                            mod->GetParamBlock(0)->SetValue(casavista_class, t, buffer);
+                        }
+                    }
+                }
+            }
+            return TRUE;
+        }
+        break;
     }
     return FALSE;
 }
@@ -306,7 +371,13 @@ void CasavistaPBAccessor::Set(PB2Value& v, ReferenceMaker* owner, ParamID id, in
     if (mod && mod->ip) { 
         INode* node = mod->ip->GetSelNode(0);
         if (node) {
+            // Update both the user property and parameter block
             mod->SetClassProperty(node, v.s);
+            
+            // Force UI update
+            if (mod->GetParamBlock(0)) {
+                mod->GetParamBlock(0)->NotifyDependents(FOREVER, PART_ALL, REFMSG_CHANGE);
+            }
         }
     }
 }
