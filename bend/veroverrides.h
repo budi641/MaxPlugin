@@ -1,11 +1,10 @@
-#pragma once
 // The to be #defined in a .h file included by a .rc file before maxversion.r
 
 
-#define MAXVER_INTERNALNAME "casavista\0"
-#define MAXVER_ORIGINALFILENAME "casavista.dlm\0"
-#define MAXVER_FILEDESCRIPTION "Casavista Property Editor Modifier\0"
-#define MAXVER_COMMENTS "Property editor for Casavista objects\0"
+#define MAXVER_INTERNALNAME "bendmod\0"//should  be overidden on a per-dll level
+#define MAXVER_ORIGINALFILENAME "bendmod.dlm\0"//should  be overidden on a per-dll level
+#define MAXVER_FILEDESCRIPTION "Object-space modifier sample (plugin)\0"//should  be overidden on a per-dll level
+#define MAXVER_COMMENTS "\0"//should  be overidden on a per-dll level
 
 // #define MAXVER_PRODUCTNAME //generally not overridden at the maxversion.r level
 // #define MAXVER_COPYRIGHT //only in exceptions should this be overridden

@@ -2,36 +2,18 @@
 // Microsoft Visual C++ generated include file.
 // Used by casavista.rc
 //
-#define IDS_RB_BEND2                    2
-#define IDS_RB_BEND_OSM_CLASS           3
-#define IDS_MODBASED                    4
-#define IDS_RB_HOWTO                    5
-#define IDS_RB_PARAMETERS               6
-#define IDS_RB_ANGLE                    7
-#define IDS_RB_DIRECTION                8
-#define IDS_RB_FROM                     9
-#define IDS_RB_TO                       10
-#define IDS_LIB_DESC                    11
-#define IDS_FROMTO                      12
-#define IDS_FROM                        14
-#define IDS_TO                          15
-#define IDS_ANGLE                       16
-#define IDS_DIR                         17
-#define IDS_AXIS                        18
-#define IDS_RB_BEND_WSM_CLASS           19
-#define IDD_BENDPARAM                   101
-#define IDC_ANGLE                       1000
-#define IDC_X                           1001
-#define IDC_Y                           1002
-#define IDC_Z                           1003
-#define IDC_DIR                         1004
-#define IDC_ANGLESPINNER                1005
-#define IDC_DIRSPINNER                  1006
-#define IDC_BEND_AFFECTREGION           1108
-#define IDC_BEND_TO                     1109
-#define IDC_BEND_TOSPIN                 1110
-#define IDC_BEND_FROM                   1111
-#define IDC_BEND_FROMSPIN               1112
+#define IDS_RB_CASAVISTA                    2
+#define IDS_RB_CASAVISTA_OSM_CLASS          3
+#define IDS_MODBASED                        4
+#define IDS_RB_HOWTO                        5
+#define IDS_RB_PARAMETERS                   6
+#define IDS_RB_CLASS                        7
+#define IDS_LIB_DESC                        11
+#define IDS_CLASS_NONE                      12
+#define IDS_CLASS_INTERACTABLE              13
+#define IDD_CASAVISTAPARAM                  101
+#define IDC_CLASS                           1000
+#define IDC_CLASS_COMBO                     1001
 
 // Next default values for new objects
 // 
