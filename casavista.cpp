@@ -12,6 +12,8 @@
   Copyright (c) 2024, All Rights Reserved.
 \*===========================================================================*/
 
+#define NOMINMAX  // Prevent min/max macro warnings
+
 #include "max.h"
 #include "resource.h"
 #include "simpmod.h"
@@ -63,6 +65,13 @@ class CasavistaClassDesc;
 class CasavistaDlgProc;
 class CasavistaPBAccessor;
 
+// Forward declarations for dialog procedures
+INT_PTR CALLBACK ModelSelectDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
+INT_PTR CALLBACK MaterialSelectDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
+
+// Forward declaration for helper function
+void AddGeometryNodesToList(INode* node, HWND hList);
+
 // 1. CasavistaMod Class Declaration
 class CasavistaMod : public SimpleMod2 {
 public:
@@ -88,6 +97,14 @@ public:
     // Override GetParamBlock to match base class
     IParamBlock2* GetParamBlock(int i) override { return pblock2; }
     int NumParamBlocks() override { return 1; }
+
+    // New methods for models and materials
+    void SetModelsProperty(INode* node, const TCHAR* models);
+    const TCHAR* GetModelsProperty(INode* node);
+    void SetMaterialsProperty(INode* node, const TCHAR* materials);
+    const TCHAR* GetMaterialsProperty(INode* node);
+    void ShowModelSelectDialog();
+    void ShowMaterialSelectDialog();
 
 public:
     static IObjParam* ip; 
@@ -189,9 +206,13 @@ void CasavistaMod::BeginEditParams(IObjParam* ip, ULONG flags, Animatable* prev)
         if (node) {
             // Clear any existing properties first
             node->SetUserPropString(_T("CasavistaClass"), NULL);
+            node->SetUserPropString(_T("CasavistaModels"), NULL);
+            node->SetUserPropString(_T("CasavistaMaterials"), NULL);
             
             // Set initial values
             node->SetUserPropString(_T("CasavistaClass"), _T("None"));
+            node->SetUserPropString(_T("CasavistaModels"), _T(""));
+            node->SetUserPropString(_T("CasavistaMaterials"), _T(""));
             node->SetUserPropBool(_T("HasCasavistaMod"), TRUE);
         }
     }
@@ -275,6 +296,71 @@ const TCHAR* CasavistaMod::GetClassProperty(INode* node)
     return propValue.data();
 }
 
+// New methods for models and materials
+void CasavistaMod::SetModelsProperty(INode* node, const TCHAR* models)
+{
+    if (node) {
+        node->SetUserPropString(_T("CasavistaModels"), models);
+    }
+}
+
+const TCHAR* CasavistaMod::GetModelsProperty(INode* node)
+{
+    if (!node) {
+        return _T("");
+    }
+
+    static TSTR propValue;
+    node->GetUserPropString(_T("CasavistaModels"), propValue);
+    
+    if (propValue.isNull() || propValue.Length() == 0) {
+        node->SetUserPropString(_T("CasavistaModels"), _T(""));
+        return _T("");
+    }
+    return propValue.data();
+}
+
+void CasavistaMod::SetMaterialsProperty(INode* node, const TCHAR* materials)
+{
+    if (node) {
+        node->SetUserPropString(_T("CasavistaMaterials"), materials);
+    }
+}
+
+const TCHAR* CasavistaMod::GetMaterialsProperty(INode* node)
+{
+    if (!node) {
+        return _T("");
+    }
+
+    static TSTR propValue;
+    node->GetUserPropString(_T("CasavistaMaterials"), propValue);
+    
+    if (propValue.isNull() || propValue.Length() == 0) {
+        node->SetUserPropString(_T("CasavistaMaterials"), _T(""));
+        return _T("");
+    }
+    return propValue.data();
+}
+
+void CasavistaMod::ShowModelSelectDialog()
+{
+    if (!ip) return;
+
+    // Create and show the model selection dialog
+    DialogBoxParam(hInstance, MAKEINTRESOURCE(IDD_MODEL_SELECT), 
+        ip->GetMAXHWnd(), (DLGPROC)ModelSelectDlgProc, (LPARAM)this);
+}
+
+void CasavistaMod::ShowMaterialSelectDialog()
+{
+    if (!ip) return;
+
+    // Create and show the material selection dialog
+    DialogBoxParam(hInstance, MAKEINTRESOURCE(IDD_MATERIAL_SELECT), 
+        ip->GetMAXHWnd(), (DLGPROC)MaterialSelectDlgProc, (LPARAM)this);
+}
+
 // CasavistaClassDesc Methods Implementations
 void* CasavistaClassDesc::Create(BOOL loading) {
     return new CasavistaMod();
@@ -334,6 +420,24 @@ INT_PTR CasavistaDlgProc::DlgProc(TimeValue t, IParamMap2* map, HWND hWnd, UINT 
                 }
                 SendMessage(hCombo, CB_SETCURSEL, index, 0);
             }
+
+            // Initialize models list
+            HWND hModelsList = GetDlgItem(hWnd, IDC_MODELS_LIST);
+            if (hModelsList && mod && node) {
+                const TCHAR* models = mod->GetModelsProperty(node);
+                if (models && _tcslen(models) > 0) {
+                    // TODO: Split string and add items to list
+                }
+            }
+
+            // Initialize materials list
+            HWND hMaterialsList = GetDlgItem(hWnd, IDC_MATERIALS_LIST);
+            if (hMaterialsList && mod && node) {
+                const TCHAR* materials = mod->GetMaterialsProperty(node);
+                if (materials && _tcslen(materials) > 0) {
+                    // TODO: Split string and add items to list
+                }
+            }
         }
         break;
 
@@ -354,6 +458,18 @@ INT_PTR CasavistaDlgProc::DlgProc(TimeValue t, IParamMap2* map, HWND hWnd, UINT 
                         }
                     }
                 }
+            }
+            return TRUE;
+        }
+        else if (LOWORD(wParam) == IDC_MODELS_ADD) {
+            if (mod) {
+                mod->ShowModelSelectDialog();
+            }
+            return TRUE;
+        }
+        else if (LOWORD(wParam) == IDC_MATERIALS_ADD) {
+            if (mod) {
+                mod->ShowMaterialSelectDialog();
             }
             return TRUE;
         }
@@ -399,3 +515,149 @@ __declspec(dllexport) const TCHAR* LibDescription() { return GetString(IDS_LIB_D
 __declspec(dllexport) int LibNumberClasses() { return 1; }
 __declspec(dllexport) ClassDesc* LibClassDesc(int i) { return GetCasavistaDesc(); }
 __declspec(dllexport) ULONG LibVersion() { return VERSION_3DSMAX; }
+
+// Add these dialog procedures
+INT_PTR CALLBACK ModelSelectDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
+{
+    CasavistaMod* mod = (CasavistaMod*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
+
+    switch (msg) {
+    case WM_INITDIALOG:
+        {
+            SetWindowLongPtr(hWnd, GWLP_USERDATA, lParam);
+            mod = (CasavistaMod*)lParam;
+
+            // Populate the list with available models
+            HWND hList = GetDlgItem(hWnd, IDC_MODELS_LIST);
+            if (hList && mod && mod->ip) {
+                // Get the interface
+                Interface* ip = mod->ip;
+                
+                // Get the root node
+                INode* rootNode = ip->GetRootNode();
+                if (rootNode) {
+                    // Add all geometry nodes to the list
+                    AddGeometryNodesToList(rootNode, hList);
+                }
+            }
+        }
+        return TRUE;
+
+    case WM_COMMAND:
+        if (LOWORD(wParam) == IDOK) {
+            // Get the selected model
+            HWND hList = GetDlgItem(hWnd, IDC_MODELS_LIST);
+            if (hList) {
+                int index = SendMessage(hList, LB_GETCURSEL, 0, 0);
+                if (index != LB_ERR) {
+                    TCHAR buffer[256];
+                    SendMessage(hList, LB_GETTEXT, index, (LPARAM)buffer);
+                    
+                    // Get the current node
+                    INode* node = mod->ip->GetSelNode(0);
+                    if (node) {
+                        // Get current models string
+                        TSTR currentModels = mod->GetModelsProperty(node);
+                        
+                        // Add the new model to the list
+                        if (currentModels.Length() > 0) {
+                            currentModels += _T(",");
+                        }
+                        currentModels += buffer;
+                        
+                        // Update the property
+                        mod->SetModelsProperty(node, currentModels);
+                        
+                        // Update the main dialog's list
+                        HWND hMainList = GetDlgItem(GetParent(hWnd), IDC_MODELS_LIST);
+                        if (hMainList) {
+                            SendMessage(hMainList, LB_ADDSTRING, 0, (LPARAM)buffer);
+                        }
+                    }
+                }
+            }
+            EndDialog(hWnd, IDOK);
+            return TRUE;
+        }
+        else if (LOWORD(wParam) == IDCANCEL) {
+            EndDialog(hWnd, IDCANCEL);
+            return TRUE;
+        }
+        break;
+    }
+    return FALSE;
+}
+
+// Helper function to recursively add geometry nodes to the list
+void AddGeometryNodesToList(INode* node, HWND hList)
+{
+    if (!node) return;
+
+    // Check if this is a geometry node
+    Object* obj = node->GetObjectRef();
+    if (obj && obj->SuperClassID() == GEOMOBJECT_CLASS_ID) {
+        // Add the node name to the list
+        SendMessage(hList, LB_ADDSTRING, 0, (LPARAM)node->GetName());
+    }
+
+    // Process child nodes
+    for (int i = 0; i < node->NumberOfChildren(); i++) {
+        AddGeometryNodesToList(node->GetChildNode(i), hList);
+    }
+}
+
+INT_PTR CALLBACK MaterialSelectDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
+{
+    CasavistaMod* mod = (CasavistaMod*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
+
+    switch (msg) {
+    case WM_INITDIALOG:
+        {
+            SetWindowLongPtr(hWnd, GWLP_USERDATA, lParam);
+            mod = (CasavistaMod*)lParam;
+
+            // Populate the list with available materials
+            HWND hList = GetDlgItem(hWnd, IDC_MATERIALS_LIST);
+            if (hList && mod && mod->ip) {
+                // TODO: Add code to populate list with scene materials
+            }
+
+            // Initialize the index spinner
+            HWND hSpin = GetDlgItem(hWnd, IDC_MATERIAL_INDEX_SPIN);
+            if (hSpin) {
+                // Set the range (0 to 999)
+                SendMessage(hSpin, UDM_SETRANGE32, 0, 999);
+                // Set initial value to 0
+                SendMessage(hSpin, UDM_SETPOS32, 0, 0);
+                // Set buddy window
+                SendMessage(hSpin, UDM_SETBUDDY, (WPARAM)GetDlgItem(hWnd, IDC_MATERIAL_INDEX_EDIT), 0);
+            }
+
+            // Initialize the edit box
+            HWND hEdit = GetDlgItem(hWnd, IDC_MATERIAL_INDEX_EDIT);
+            if (hEdit) {
+                SetWindowText(hEdit, _T("0"));
+            }
+        }
+        return TRUE;
+
+    case WM_COMMAND:
+        if (LOWORD(wParam) == IDOK) {
+            // Get the material index
+            HWND hEdit = GetDlgItem(hWnd, IDC_MATERIAL_INDEX_EDIT);
+            if (hEdit) {
+                TCHAR buffer[32];
+                GetWindowText(hEdit, buffer, 32);
+                // TODO: Handle material selection and index
+            }
+            EndDialog(hWnd, IDOK);
+            return TRUE;
+        }
+        else if (LOWORD(wParam) == IDCANCEL) {
+            EndDialog(hWnd, IDCANCEL);
+            return TRUE;
+        }
+        break;
+    }
+    return FALSE;
+}
