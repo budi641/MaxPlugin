@@ -652,8 +652,10 @@ INT_PTR CALLBACK ModelSelectDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM l
                 // Get the root node
                 INode* rootNode = ip->GetRootNode();
                 if (rootNode) {
+                    DebugOutput(_T("Starting to populate models list\n"));
                     // Add all geometry nodes to the list
                     AddGeometryNodesToList(rootNode, hList);
+                    DebugOutput(_T("Finished populating models list\n"));
                 }
             }
         }
@@ -709,11 +711,33 @@ void AddGeometryNodesToList(INode* node, HWND hList)
 {
     if (!node) return;
 
-    // Check if this is a geometry node
+    // Debug output for node name
+    TCHAR debugBuffer[1024];
+    _stprintf_s(debugBuffer, _T("[Casavista] Processing node: %s\n"), node->GetName());
+    OutputDebugString(debugBuffer);
+
+    // Get the object reference
     Object* obj = node->GetObjectRef();
-    if (obj && obj->SuperClassID() == GEOMOBJECT_CLASS_ID) {
-        // Add the node name to the list
-        SendMessage(hList, LB_ADDSTRING, 0, (LPARAM)node->GetName());
+    if (obj) {
+        // Get the base object by following the reference chain
+        int depth = 0;
+        while (obj && obj->SuperClassID() == OSM_CLASS_ID) {
+            _stprintf_s(debugBuffer, _T("[Casavista]   Following modifier chain, depth: %d, class: %d\n"), depth, obj->SuperClassID());
+            OutputDebugString(debugBuffer);
+            obj = (Object*)obj->GetReference(0);
+            depth++;
+        }
+
+        _stprintf_s(debugBuffer, _T("[Casavista]   Base object class: %d\n"), obj ? obj->SuperClassID() : -1);
+        OutputDebugString(debugBuffer);
+        
+        // Check if this is a geometry node
+        if (obj && obj->SuperClassID() == GEOMOBJECT_CLASS_ID) {
+            _stprintf_s(debugBuffer, _T("[Casavista]   Adding geometry node: %s\n"), node->GetName());
+            OutputDebugString(debugBuffer);
+            // Add the node name to the list regardless of whether it has the modifier or not
+            SendMessage(hList, LB_ADDSTRING, 0, (LPARAM)node->GetName());
+        }
     }
 
     // Process child nodes
