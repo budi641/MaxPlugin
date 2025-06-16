@@ -561,6 +561,62 @@ INT_PTR CasavistaDlgProc::DlgProc(TimeValue t, IParamMap2* map, HWND hWnd, UINT 
             }
             return TRUE;
         }
+        else if (LOWORD(wParam) == IDC_MODELS_REMOVE) {
+            if (mod && node) {
+                HWND hModelsList = GetDlgItem(hWnd, IDC_MODELS_LIST);
+                if (hModelsList) {
+                    int index = SendMessage(hModelsList, LB_GETCURSEL, 0, 0);
+                    if (index != LB_ERR) {
+                        // Get the selected model name
+                        TCHAR buffer[256];
+                        SendMessage(hModelsList, LB_GETTEXT, index, (LPARAM)buffer);
+                        
+                        // Get current models string
+                        TSTR currentModels = mod->GetModelsProperty(node);
+                        
+                        // Remove the selected model from the string
+                        WStr modelStr = currentModels;
+                        WStr modelToRemove = buffer;
+                        int start = 0;
+                        int end = 0;
+                        TSTR newModels;
+                        bool first = true;
+                        
+                        while ((end = modelStr.first(L',')) != -1) {
+                            WStr modelName = modelStr.Substr(start, end - start);
+                            TrimWStr(modelName);
+                            if (modelName.Length() > 0 && _tcscmp(modelName.data(), modelToRemove.data()) != 0) {
+                                if (!first) {
+                                    newModels += _T(",");
+                                }
+                                newModels += modelName.data();
+                                first = false;
+                            }
+                            start = end + 1;
+                            modelStr = modelStr.Substr(start, modelStr.Length() - start);
+                        }
+                        
+                        // Check the last model
+                        if (modelStr.Length() > 0) {
+                            TrimWStr(modelStr);
+                            if (modelStr.Length() > 0 && _tcscmp(modelStr.data(), modelToRemove.data()) != 0) {
+                                if (!first) {
+                                    newModels += _T(",");
+                                }
+                                newModels += modelStr.data();
+                            }
+                        }
+                        
+                        // Update the property
+                        mod->SetModelsProperty(node, newModels);
+                        
+                        // Update the list
+                        SendMessage(hModelsList, LB_DELETESTRING, index, 0);
+                    }
+                }
+            }
+            return TRUE;
+        }
         else if (LOWORD(wParam) == IDC_MATERIALS_ADD) {
             if (mod) {
                 mod->ShowMaterialSelectDialog();
