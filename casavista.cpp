@@ -137,6 +137,7 @@ public:
 private:
     static CasavistaMod* editMod;
     IParamBlock2* pblock2;
+    INode* editNode = nullptr; // Store the node pointer for property cleanup
 };
 
 // 2. CasavistaClassDesc Class Declaration
@@ -198,7 +199,7 @@ ParamBlockDesc2 casavista_param_blk(
 // 9. Implementations of ALL Methods
 
 // CasavistaMod Methods Implementations
-CasavistaMod::CasavistaMod() : pblock2(NULL) {
+CasavistaMod::CasavistaMod() : pblock2(NULL), editNode(nullptr) {
     CasavistaDesc.MakeAutoParamBlocks(this);
     assert(pblock2);
 
@@ -209,6 +210,15 @@ CasavistaMod::CasavistaMod() : pblock2(NULL) {
 }
 
 CasavistaMod::~CasavistaMod() {
+    // Clean up user properties if the modifier is being destroyed and node is still valid
+    if (editNode) {
+        editNode->SetUserPropBool(_T("HasCasavistaMod"), FALSE);
+        editNode->SetUserPropString(_T("HasCasavistaMod"), NULL);
+        editNode->SetUserPropString(_T("CasavistaClass"), NULL);
+        editNode->SetUserPropString(_T("CasavistaModels"), NULL);
+        editNode->SetUserPropString(_T("CasavistaMaterials"), NULL);
+        editNode = nullptr;
+    }
 }
 
 void CasavistaMod::GetClassName(MSTR& s, bool localized) const {
@@ -229,6 +239,7 @@ void CasavistaMod::BeginEditParams(IObjParam* ip, ULONG flags, Animatable* prev)
     // When the modifier is first applied, initialize the user properties
     if (ip) {
         INode* node = ip->GetSelNode(0);
+        editNode = node; // Store for later cleanup
         if (node) {
             // Check if properties already exist
             TSTR currentClass;
@@ -277,6 +288,7 @@ void CasavistaMod::EndEditParams(IObjParam* ip, ULONG flags, Animatable* next)
     CasavistaDesc.EndEditParams(ip, this, flags, next);
     SimpleMod2::EndEditParams(ip, flags, next);
     this->ip = NULL;
+    this->editNode = nullptr;
 }
 
 IOResult CasavistaMod::Load(ILoad* iload)
@@ -474,7 +486,11 @@ INT_PTR CasavistaDlgProc::DlgProc(TimeValue t, IParamMap2* map, HWND hWnd, UINT 
                 SendMessage(hCombo, CB_RESETCONTENT, 0, 0);
                 SendMessage(hCombo, CB_ADDSTRING, 0, (LPARAM)_T("None"));
                 SendMessage(hCombo, CB_ADDSTRING, 0, (LPARAM)_T("Interactable"));
-                SendMessage(hCombo, CB_SETCURSEL, 0, 0); // Default to 'None'
+                // Set selection based on user property
+                TSTR classProp = mod->GetClassProperty(node);
+                int selIndex = 0;
+                if (!_tcsicmp(classProp, _T("Interactable"))) selIndex = 1;
+                SendMessage(hCombo, CB_SETCURSEL, selIndex, 0);
             }
 
             // Initialize the models list
