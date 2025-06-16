@@ -769,7 +769,48 @@ INT_PTR CALLBACK MaterialSelectDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARA
             // Populate the list with available materials
             HWND hList = GetDlgItem(hWnd, IDC_MATERIALS_LIST);
             if (hList && mod && mod->ip) {
-                // TODO: Add code to populate list with scene materials
+                // First get materials from the material editor
+                const MtlBaseLib& editorMtlLib = mod->ip->GetMaterialLibrary();
+                DebugOutput(_T("Material Editor Library Count: %d\n"), editorMtlLib.Count());
+                
+                // Add each material from the editor to the list
+                for (int i = 0; i < editorMtlLib.Count(); i++) {
+                    MtlBase* mtl = editorMtlLib[i];
+                    if (mtl) {
+                        MSTR name = mtl->GetName();
+                        DebugOutput(_T("Adding editor material: %s\n"), name.data());
+                        SendMessage(hList, LB_ADDSTRING, 0, (LPARAM)name.data());
+                    }
+                }
+
+                // Then get materials from the scene
+                MtlBaseLib* sceneMtlLib = mod->ip->GetSceneMtls();
+                DebugOutput(_T("Scene Material Library Count: %d\n"), sceneMtlLib ? sceneMtlLib->Count() : 0);
+                
+                // Add each material from the scene to the list if not already added
+                if (sceneMtlLib) {
+                    for (int i = 0; i < sceneMtlLib->Count(); i++) {
+                        MtlBase* mtl = (*sceneMtlLib)[i];
+                        if (mtl) {
+                            MSTR name = mtl->GetName();
+                            // Check if this material is already in the list
+                            int count = SendMessage(hList, LB_GETCOUNT, 0, 0);
+                            bool found = false;
+                            for (int j = 0; j < count; j++) {
+                                TCHAR existingName[256];
+                                SendMessage(hList, LB_GETTEXT, j, (LPARAM)existingName);
+                                if (_tcscmp(existingName, name.data()) == 0) {
+                                    found = true;
+                                    break;
+                                }
+                            }
+                            if (!found) {
+                                DebugOutput(_T("Adding scene material: %s\n"), name.data());
+                                SendMessage(hList, LB_ADDSTRING, 0, (LPARAM)name.data());
+                            }
+                        }
+                    }
+                }
             }
 
             // Initialize the index spinner
@@ -793,12 +834,50 @@ INT_PTR CALLBACK MaterialSelectDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARA
 
     case WM_COMMAND:
         if (LOWORD(wParam) == IDOK) {
-            // Get the material index
-            HWND hEdit = GetDlgItem(hWnd, IDC_MATERIAL_INDEX_EDIT);
-            if (hEdit) {
-                TCHAR buffer[32];
-                GetWindowText(hEdit, buffer, 32);
-                // TODO: Handle material selection and index
+            // Get the selected material
+            HWND hList = GetDlgItem(hWnd, IDC_MATERIALS_LIST);
+            if (hList) {
+                int index = SendMessage(hList, LB_GETCURSEL, 0, 0);
+                if (index != LB_ERR) {
+                    TCHAR buffer[256];
+                    SendMessage(hList, LB_GETTEXT, index, (LPARAM)buffer);
+                    
+                    // Get the material index
+                    HWND hEdit = GetDlgItem(hWnd, IDC_MATERIAL_INDEX_EDIT);
+                    if (hEdit) {
+                        TCHAR indexBuffer[32];
+                        GetWindowText(hEdit, indexBuffer, 32);
+                        int materialIndex = _ttoi(indexBuffer);
+                        
+                        // Get the current node
+                        INode* node = mod->ip->GetSelNode(0);
+                        if (node) {
+                            // Get current materials string
+                            TSTR currentMaterials = mod->GetMaterialsProperty(node);
+                            
+                            // Add the new material to the list
+                            if (currentMaterials.Length() > 0) {
+                                currentMaterials += _T(",");
+                            }
+                            currentMaterials += buffer;
+                            currentMaterials += _T(":");
+                            TCHAR indexStr[32];
+                            _stprintf_s(indexStr, _T("%d"), materialIndex);
+                            currentMaterials += indexStr;
+                            
+                            // Update the property
+                            mod->SetMaterialsProperty(node, currentMaterials);
+                            
+                            // Update the main dialog's list
+                            HWND hMainList = GetDlgItem(GetParent(hWnd), IDC_MATERIALS_LIST);
+                            if (hMainList) {
+                                TCHAR displayBuffer[512];
+                                _stprintf_s(displayBuffer, _T("%s (Index: %d)"), buffer, materialIndex);
+                                SendMessage(hMainList, LB_ADDSTRING, 0, (LPARAM)displayBuffer);
+                            }
+                        }
+                    }
+                }
             }
             EndDialog(hWnd, IDOK);
             return TRUE;
