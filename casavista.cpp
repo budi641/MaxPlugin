@@ -72,6 +72,28 @@ INT_PTR CALLBACK MaterialSelectDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARA
 // Forward declaration for helper function
 void AddGeometryNodesToList(INode* node, HWND hList);
 
+// Helper function to trim whitespace from a WStr
+void TrimWStr(WStr& str) {
+    const wchar_t* data = str.data();
+    int len = str.Length();
+    int start = 0;
+    int end = len - 1;
+
+    // Find start of non-whitespace
+    while (start < len && (data[start] == L' ' || data[start] == L'\t' || data[start] == L'\n' || data[start] == L'\r')) {
+        start++;
+    }
+
+    // Find end of non-whitespace
+    while (end >= 0 && (data[end] == L' ' || data[end] == L'\t' || data[end] == L'\n' || data[end] == L'\r')) {
+        end--;
+    }
+
+    if (start > 0 || end < len - 1) {
+        str = str.Substr(start, end - start + 1);
+    }
+}
+
 // 1. CasavistaMod Class Declaration
 class CasavistaMod : public SimpleMod2 {
 public:
@@ -204,16 +226,30 @@ void CasavistaMod::BeginEditParams(IObjParam* ip, ULONG flags, Animatable* prev)
     if (ip) {
         INode* node = ip->GetSelNode(0);
         if (node) {
-            // Clear any existing properties first
-            node->SetUserPropString(_T("CasavistaClass"), NULL);
-            node->SetUserPropString(_T("CasavistaModels"), NULL);
-            node->SetUserPropString(_T("CasavistaMaterials"), NULL);
-            
-            // Set initial values
-            node->SetUserPropString(_T("CasavistaClass"), _T("None"));
-            node->SetUserPropString(_T("CasavistaModels"), _T(""));
-            node->SetUserPropString(_T("CasavistaMaterials"), _T(""));
-            node->SetUserPropBool(_T("HasCasavistaMod"), TRUE);
+            // Check if properties already exist
+            TSTR currentClass;
+            TSTR currentModels;
+            TSTR currentMaterials;
+            BOOL hasMod = FALSE;
+
+            node->GetUserPropString(_T("CasavistaClass"), currentClass);
+            node->GetUserPropString(_T("CasavistaModels"), currentModels);
+            node->GetUserPropString(_T("CasavistaMaterials"), currentMaterials);
+            node->GetUserPropBool(_T("HasCasavistaMod"), hasMod);
+
+            // Only initialize if properties don't exist
+            if (!hasMod) {
+                node->SetUserPropString(_T("CasavistaClass"), _T("None"));
+                node->SetUserPropString(_T("CasavistaModels"), _T(""));
+                node->SetUserPropString(_T("CasavistaMaterials"), _T(""));
+                node->SetUserPropBool(_T("HasCasavistaMod"), TRUE);
+            }
+            else {
+                // Update parameter block with existing values
+                if (pblock2) {
+                    pblock2->SetValue(casavista_class, 0, currentClass);
+                }
+            }
         }
     }
 
@@ -222,10 +258,19 @@ void CasavistaMod::BeginEditParams(IObjParam* ip, ULONG flags, Animatable* prev)
 
 void CasavistaMod::EndEditParams(IObjParam* ip, ULONG flags, Animatable* next)
 {
+    // Save current state before ending edit
+    if (ip) {
+        INode* node = ip->GetSelNode(0);
+        if (node && pblock2) {
+            const TCHAR* className;
+            Interval valid = FOREVER;
+            pblock2->GetValue(casavista_class, 0, className, valid);
+            node->SetUserPropString(_T("CasavistaClass"), className);
+        }
+    }
+
     editMod = NULL;
-
     CasavistaDesc.EndEditParams(ip, this, flags, next);
-
     SimpleMod2::EndEditParams(ip, flags, next);
     this->ip = NULL;
 }
@@ -396,6 +441,7 @@ INT_PTR CasavistaDlgProc::DlgProc(TimeValue t, IParamMap2* map, HWND hWnd, UINT 
     switch (msg) {
     case WM_INITDIALOG:
         {
+            // Initialize combo box
             HWND hCombo = GetDlgItem(hWnd, IDC_CLASS_COMBO);
             if (hCombo) {
                 SendMessage(hCombo, CB_RESETCONTENT, 0, 0);
@@ -404,6 +450,7 @@ INT_PTR CasavistaDlgProc::DlgProc(TimeValue t, IParamMap2* map, HWND hWnd, UINT 
                     SendMessage(hCombo, CB_ADDSTRING, 0, (LPARAM)classNames[i]);
                 }
 
+                // Get current class from user properties
                 const TCHAR* currentClass = _T("None");
                 if (mod && node) {
                     currentClass = mod->GetClassProperty(node);
@@ -424,15 +471,34 @@ INT_PTR CasavistaDlgProc::DlgProc(TimeValue t, IParamMap2* map, HWND hWnd, UINT 
             // Initialize models list
             HWND hModelsList = GetDlgItem(hWnd, IDC_MODELS_LIST);
             if (hModelsList && mod && node) {
+                SendMessage(hModelsList, LB_RESETCONTENT, 0, 0);
                 const TCHAR* models = mod->GetModelsProperty(node);
                 if (models && _tcslen(models) > 0) {
-                    // TODO: Split string and add items to list
+                    WStr modelStr = models;
+                    int start = 0;
+                    int end = 0;
+                    while ((end = modelStr.first(L',')) != -1) {
+                        WStr modelName = modelStr.Substr(start, end - start);
+                        TrimWStr(modelName);
+                        if (modelName.Length() > 0) {
+                            SendMessage(hModelsList, LB_ADDSTRING, 0, (LPARAM)modelName.data());
+                        }
+                        start = end + 1;
+                        modelStr = modelStr.Substr(start, modelStr.Length() - start);
+                    }
+                    if (modelStr.Length() > 0) {
+                        TrimWStr(modelStr);
+                        if (modelStr.Length() > 0) {
+                            SendMessage(hModelsList, LB_ADDSTRING, 0, (LPARAM)modelStr.data());
+                        }
+                    }
                 }
             }
 
             // Initialize materials list
             HWND hMaterialsList = GetDlgItem(hWnd, IDC_MATERIALS_LIST);
             if (hMaterialsList && mod && node) {
+                SendMessage(hMaterialsList, LB_RESETCONTENT, 0, 0);
                 const TCHAR* materials = mod->GetMaterialsProperty(node);
                 if (materials && _tcslen(materials) > 0) {
                     // TODO: Split string and add items to list
@@ -464,6 +530,34 @@ INT_PTR CasavistaDlgProc::DlgProc(TimeValue t, IParamMap2* map, HWND hWnd, UINT 
         else if (LOWORD(wParam) == IDC_MODELS_ADD) {
             if (mod) {
                 mod->ShowModelSelectDialog();
+                // Refresh the models list after dialog closes
+                if (node) {
+                    HWND hModelsList = GetDlgItem(hWnd, IDC_MODELS_LIST);
+                    if (hModelsList) {
+                        SendMessage(hModelsList, LB_RESETCONTENT, 0, 0);
+                        const TCHAR* models = mod->GetModelsProperty(node);
+                        if (models && _tcslen(models) > 0) {
+                            WStr modelStr = models;
+                            int start = 0;
+                            int end = 0;
+                            while ((end = modelStr.first(L',')) != -1) {
+                                WStr modelName = modelStr.Substr(start, end - start);
+                                TrimWStr(modelName);
+                                if (modelName.Length() > 0) {
+                                    SendMessage(hModelsList, LB_ADDSTRING, 0, (LPARAM)modelName.data());
+                                }
+                                start = end + 1;
+                                modelStr = modelStr.Substr(start, modelStr.Length() - start);
+                            }
+                            if (modelStr.Length() > 0) {
+                                TrimWStr(modelStr);
+                                if (modelStr.Length() > 0) {
+                                    SendMessage(hModelsList, LB_ADDSTRING, 0, (LPARAM)modelStr.data());
+                                }
+                            }
+                        }
+                    }
+                }
             }
             return TRUE;
         }
