@@ -451,11 +451,10 @@ INT_PTR CasavistaDlgProc::DlgProc(TimeValue t, IParamMap2* map, HWND hWnd, UINT 
             // Initialize the class combo box
             HWND hCombo = GetDlgItem(hWnd, IDC_CLASS_COMBO);
             if (hCombo) {
-                // Add class options
-                SendMessage(hCombo, CB_ADDSTRING, 0, (LPARAM)_T("Class A"));
-                SendMessage(hCombo, CB_ADDSTRING, 0, (LPARAM)_T("Class B"));
-                SendMessage(hCombo, CB_ADDSTRING, 0, (LPARAM)_T("Class C"));
-                SendMessage(hCombo, CB_SETCURSEL, 0, 0);
+                SendMessage(hCombo, CB_RESETCONTENT, 0, 0);
+                SendMessage(hCombo, CB_ADDSTRING, 0, (LPARAM)_T("None"));
+                SendMessage(hCombo, CB_ADDSTRING, 0, (LPARAM)_T("Interactable"));
+                SendMessage(hCombo, CB_SETCURSEL, 0, 0); // Default to 'None'
             }
 
             // Initialize the models list
