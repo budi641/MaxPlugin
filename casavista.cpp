@@ -71,6 +71,8 @@ INT_PTR CALLBACK MaterialSelectDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARA
 
 // Forward declaration for helper function
 void AddGeometryNodesToList(INode* node, HWND hList);
+void UpdateModelsListBox(HWND hWnd, CasavistaMod* mod, INode* node);
+void UpdateMaterialsListBox(HWND hWnd, CasavistaMod* mod, INode* node);
 
 // Helper function to trim whitespace from a WStr
 void TrimWStr(WStr& str) {
@@ -458,90 +460,10 @@ INT_PTR CasavistaDlgProc::DlgProc(TimeValue t, IParamMap2* map, HWND hWnd, UINT 
             }
 
             // Initialize the models list
-            HWND hModelsList = GetDlgItem(hWnd, IDC_MODELS_LIST);
-            if (hModelsList) {
-                // Get the models property
-                const TCHAR* modelsStr = mod->GetModelsProperty(node);
-                if (modelsStr && _tcslen(modelsStr) > 0) {
-                    // Split the string by commas and add each model to the list
-                    int start = 0;
-                    int end = 0;
-                    WStr modelStr = modelsStr;
-                    while ((end = modelStr.first(',')) != -1) {
-                        WStr modelName = modelStr.Substr(start, end - start);
-                        // Trim whitespace
-                        while (modelName.Length() > 0 && modelName[0] == ' ') {
-                            modelName = modelName.Substr(1, modelName.Length() - 1);
-                        }
-                        while (modelName.Length() > 0 && modelName[modelName.Length() - 1] == ' ') {
-                            modelName = modelName.Substr(0, modelName.Length() - 1);
-                        }
-                        if (modelName.Length() > 0) {
-                            SendMessage(hModelsList, LB_ADDSTRING, 0, (LPARAM)modelName.data());
-                        }
-                        start = end + 1;
-                        modelStr = modelStr.Substr(start, modelStr.Length() - start);
-                        start = 0;
-                    }
-                    // Add the last model if there is one
-                    if (modelStr.Length() > 0) {
-                        WStr modelName = modelStr;
-                        // Trim whitespace
-                        while (modelName.Length() > 0 && modelName[0] == ' ') {
-                            modelName = modelName.Substr(1, modelName.Length() - 1);
-                        }
-                        while (modelName.Length() > 0 && modelName[modelName.Length() - 1] == ' ') {
-                            modelName = modelName.Substr(0, modelName.Length() - 1);
-                        }
-                        if (modelName.Length() > 0) {
-                            SendMessage(hModelsList, LB_ADDSTRING, 0, (LPARAM)modelName.data());
-                        }
-                    }
-                }
-            }
+            UpdateModelsListBox(hWnd, mod, node);
 
             // Initialize the materials list
-            HWND hMaterialsList = GetDlgItem(hWnd, IDC_MATERIALS_LIST);
-            if (hMaterialsList) {
-                // Get the materials property
-                const TCHAR* materialsStr = mod->GetMaterialsProperty(node);
-                if (materialsStr && _tcslen(materialsStr) > 0) {
-                    // Split the string by commas and add each material to the list
-                    int start = 0;
-                    int end = 0;
-                    WStr materialStr = materialsStr;
-                    while ((end = materialStr.first(',')) != -1) {
-                        WStr materialName = materialStr.Substr(start, end - start);
-                        // Trim whitespace
-                        while (materialName.Length() > 0 && materialName[0] == ' ') {
-                            materialName = materialName.Substr(1, materialName.Length() - 1);
-                        }
-                        while (materialName.Length() > 0 && materialName[materialName.Length() - 1] == ' ') {
-                            materialName = materialName.Substr(0, materialName.Length() - 1);
-                        }
-                        if (materialName.Length() > 0) {
-                            SendMessage(hMaterialsList, LB_ADDSTRING, 0, (LPARAM)materialName.data());
-                        }
-                        start = end + 1;
-                        materialStr = materialStr.Substr(start, materialStr.Length() - start);
-                        start = 0;
-                    }
-                    // Add the last material if there is one
-                    if (materialStr.Length() > 0) {
-                        WStr materialName = materialStr;
-                        // Trim whitespace
-                        while (materialName.Length() > 0 && materialName[0] == ' ') {
-                            materialName = materialName.Substr(1, materialName.Length() - 1);
-                        }
-                        while (materialName.Length() > 0 && materialName[materialName.Length() - 1] == ' ') {
-                            materialName = materialName.Substr(0, materialName.Length() - 1);
-                        }
-                        if (materialName.Length() > 0) {
-                            SendMessage(hMaterialsList, LB_ADDSTRING, 0, (LPARAM)materialName.data());
-                        }
-                    }
-                }
-            }
+            UpdateMaterialsListBox(hWnd, mod, node);
         }
         return TRUE;
 
@@ -569,6 +491,9 @@ INT_PTR CasavistaDlgProc::DlgProc(TimeValue t, IParamMap2* map, HWND hWnd, UINT 
             case IDC_MODELS_ADD:
                 if (mod) {
                     mod->ShowModelSelectDialog();
+                    // Refresh the models list after dialog closes
+                    INode* node = mod->ip->GetSelNode(0);
+                    if (node) UpdateModelsListBox(hWnd, mod, node);
                 }
                 break;
 
@@ -583,12 +508,13 @@ INT_PTR CasavistaDlgProc::DlgProc(TimeValue t, IParamMap2* map, HWND hWnd, UINT 
                             WStr modelsStr;
                             int count = SendMessage(hList, LB_GETCOUNT, 0, 0);
                             for (int i = 0; i < count; i++) {
-                                TCHAR modelName[256] = { 0 };  // Initialize to zero
+                                TCHAR modelName[256] = { 0 };
                                 SendMessage(hList, LB_GETTEXT, i, (LPARAM)modelName);
                                 if (i > 0) modelsStr += _T(",");
                                 modelsStr += modelName;
                             }
                             mod->SetModelsProperty(node, modelsStr.data());
+                            UpdateModelsListBox(hWnd, mod, node);
                         }
                     }
                 }
@@ -597,6 +523,8 @@ INT_PTR CasavistaDlgProc::DlgProc(TimeValue t, IParamMap2* map, HWND hWnd, UINT 
             case IDC_MATERIALS_ADD:
                 if (mod) {
                     mod->ShowMaterialSelectDialog();
+                    INode* node = mod->ip->GetSelNode(0);
+                    if (node) UpdateMaterialsListBox(hWnd, mod, node);
                 }
                 break;
 
@@ -611,12 +539,13 @@ INT_PTR CasavistaDlgProc::DlgProc(TimeValue t, IParamMap2* map, HWND hWnd, UINT 
                             WStr materialsStr;
                             int count = SendMessage(hList, LB_GETCOUNT, 0, 0);
                             for (int i = 0; i < count; i++) {
-                                TCHAR materialName[256] = { 0 };  // Initialize to zero
+                                TCHAR materialName[256] = { 0 };
                                 SendMessage(hList, LB_GETTEXT, i, (LPARAM)materialName);
                                 if (i > 0) materialsStr += _T(",");
                                 materialsStr += materialName;
                             }
                             mod->SetMaterialsProperty(node, materialsStr.data());
+                            UpdateMaterialsListBox(hWnd, mod, node);
                         }
                     }
                 }
@@ -893,4 +822,86 @@ INT_PTR CALLBACK MaterialSelectDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARA
         break;
     }
     return FALSE;
+}
+
+// Helper to update the models list box
+void UpdateModelsListBox(HWND hWnd, CasavistaMod* mod, INode* node) {
+    HWND hModelsList = GetDlgItem(hWnd, IDC_MODELS_LIST);
+    if (hModelsList) {
+        SendMessage(hModelsList, LB_RESETCONTENT, 0, 0);
+        const TCHAR* modelsStr = mod->GetModelsProperty(node);
+        if (modelsStr && _tcslen(modelsStr) > 0) {
+            WStr modelStr = modelsStr;
+            int start = 0;
+            int end = 0;
+            while ((end = modelStr.first(',')) != -1) {
+                WStr modelName = modelStr.Substr(start, end - start);
+                while (modelName.Length() > 0 && modelName[0] == ' ') {
+                    modelName = modelName.Substr(1, modelName.Length() - 1);
+                }
+                while (modelName.Length() > 0 && modelName[modelName.Length() - 1] == ' ') {
+                    modelName = modelName.Substr(0, modelName.Length() - 1);
+                }
+                if (modelName.Length() > 0) {
+                    SendMessage(hModelsList, LB_ADDSTRING, 0, (LPARAM)modelName.data());
+                }
+                start = end + 1;
+                modelStr = modelStr.Substr(start, modelStr.Length() - start);
+                start = 0;
+            }
+            if (modelStr.Length() > 0) {
+                WStr modelName = modelStr;
+                while (modelName.Length() > 0 && modelName[0] == ' ') {
+                    modelName = modelName.Substr(1, modelName.Length() - 1);
+                }
+                while (modelName.Length() > 0 && modelName[modelName.Length() - 1] == ' ') {
+                    modelName = modelName.Substr(0, modelName.Length() - 1);
+                }
+                if (modelName.Length() > 0) {
+                    SendMessage(hModelsList, LB_ADDSTRING, 0, (LPARAM)modelName.data());
+                }
+            }
+        }
+    }
+}
+
+// Helper to update the materials list box
+void UpdateMaterialsListBox(HWND hWnd, CasavistaMod* mod, INode* node) {
+    HWND hMaterialsList = GetDlgItem(hWnd, IDC_MATERIALS_LIST);
+    if (hMaterialsList) {
+        SendMessage(hMaterialsList, LB_RESETCONTENT, 0, 0);
+        const TCHAR* materialsStr = mod->GetMaterialsProperty(node);
+        if (materialsStr && _tcslen(materialsStr) > 0) {
+            WStr materialStr = materialsStr;
+            int start = 0;
+            int end = 0;
+            while ((end = materialStr.first(',')) != -1) {
+                WStr materialName = materialStr.Substr(start, end - start);
+                while (materialName.Length() > 0 && materialName[0] == ' ') {
+                    materialName = materialName.Substr(1, materialName.Length() - 1);
+                }
+                while (materialName.Length() > 0 && materialName[materialName.Length() - 1] == ' ') {
+                    materialName = materialName.Substr(0, materialName.Length() - 1);
+                }
+                if (materialName.Length() > 0) {
+                    SendMessage(hMaterialsList, LB_ADDSTRING, 0, (LPARAM)materialName.data());
+                }
+                start = end + 1;
+                materialStr = materialStr.Substr(start, materialStr.Length() - start);
+                start = 0;
+            }
+            if (materialStr.Length() > 0) {
+                WStr materialName = materialStr;
+                while (materialName.Length() > 0 && materialName[0] == ' ') {
+                    materialName = materialName.Substr(1, materialName.Length() - 1);
+                }
+                while (materialName.Length() > 0 && materialName[materialName.Length() - 1] == ' ') {
+                    materialName = materialName.Substr(0, materialName.Length() - 1);
+                }
+                if (materialName.Length() > 0) {
+                    SendMessage(hMaterialsList, LB_ADDSTRING, 0, (LPARAM)materialName.data());
+                }
+            }
+        }
+    }
 }
