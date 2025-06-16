@@ -441,189 +441,193 @@ INT_PTR CasavistaDlgProc::DlgProc(TimeValue t, IParamMap2* map, HWND hWnd, UINT 
     switch (msg) {
     case WM_INITDIALOG:
         {
-            // Initialize combo box
+            SetWindowLongPtr(hWnd, GWLP_USERDATA, lParam);
+            mod = (CasavistaMod*)lParam;
+
+            // Get the node
+            INode* node = mod->ip->GetSelNode(0);
+            if (!node) return FALSE;
+
+            // Initialize the class combo box
             HWND hCombo = GetDlgItem(hWnd, IDC_CLASS_COMBO);
             if (hCombo) {
-                SendMessage(hCombo, CB_RESETCONTENT, 0, 0);
-                
-                for (int i = 0; classNames[i] != NULL; i++) {
-                    SendMessage(hCombo, CB_ADDSTRING, 0, (LPARAM)classNames[i]);
-                }
-
-                // Get current class from user properties
-                const TCHAR* currentClass = _T("None");
-                if (mod && node) {
-                    currentClass = mod->GetClassProperty(node);
-                }
-
-                int index = 0;
-                if (currentClass) {
-                    for (int i = 0; classNames[i] != NULL; i++) {
-                        if (_tcscmp(currentClass, classNames[i]) == 0) {
-                            index = i;
-                            break;
-                        }
-                    }
-                }
-                SendMessage(hCombo, CB_SETCURSEL, index, 0);
+                // Add class options
+                SendMessage(hCombo, CB_ADDSTRING, 0, (LPARAM)_T("Class A"));
+                SendMessage(hCombo, CB_ADDSTRING, 0, (LPARAM)_T("Class B"));
+                SendMessage(hCombo, CB_ADDSTRING, 0, (LPARAM)_T("Class C"));
+                SendMessage(hCombo, CB_SETCURSEL, 0, 0);
             }
 
-            // Initialize models list
+            // Initialize the models list
             HWND hModelsList = GetDlgItem(hWnd, IDC_MODELS_LIST);
-            if (hModelsList && mod && node) {
-                SendMessage(hModelsList, LB_RESETCONTENT, 0, 0);
-                const TCHAR* models = mod->GetModelsProperty(node);
-                if (models && _tcslen(models) > 0) {
-                    WStr modelStr = models;
+            if (hModelsList) {
+                // Get the models property
+                const TCHAR* modelsStr = mod->GetModelsProperty(node);
+                if (modelsStr && _tcslen(modelsStr) > 0) {
+                    // Split the string by commas and add each model to the list
                     int start = 0;
                     int end = 0;
-                    while ((end = modelStr.first(L',')) != -1) {
+                    WStr modelStr = modelsStr;
+                    while ((end = modelStr.first(',')) != -1) {
                         WStr modelName = modelStr.Substr(start, end - start);
-                        TrimWStr(modelName);
+                        // Trim whitespace
+                        while (modelName.Length() > 0 && modelName[0] == ' ') {
+                            modelName = modelName.Substr(1, modelName.Length() - 1);
+                        }
+                        while (modelName.Length() > 0 && modelName[modelName.Length() - 1] == ' ') {
+                            modelName = modelName.Substr(0, modelName.Length() - 1);
+                        }
                         if (modelName.Length() > 0) {
                             SendMessage(hModelsList, LB_ADDSTRING, 0, (LPARAM)modelName.data());
                         }
                         start = end + 1;
                         modelStr = modelStr.Substr(start, modelStr.Length() - start);
+                        start = 0;
                     }
+                    // Add the last model if there is one
                     if (modelStr.Length() > 0) {
-                        TrimWStr(modelStr);
-                        if (modelStr.Length() > 0) {
-                            SendMessage(hModelsList, LB_ADDSTRING, 0, (LPARAM)modelStr.data());
+                        WStr modelName = modelStr;
+                        // Trim whitespace
+                        while (modelName.Length() > 0 && modelName[0] == ' ') {
+                            modelName = modelName.Substr(1, modelName.Length() - 1);
+                        }
+                        while (modelName.Length() > 0 && modelName[modelName.Length() - 1] == ' ') {
+                            modelName = modelName.Substr(0, modelName.Length() - 1);
+                        }
+                        if (modelName.Length() > 0) {
+                            SendMessage(hModelsList, LB_ADDSTRING, 0, (LPARAM)modelName.data());
                         }
                     }
                 }
             }
 
-            // Initialize materials list
+            // Initialize the materials list
             HWND hMaterialsList = GetDlgItem(hWnd, IDC_MATERIALS_LIST);
-            if (hMaterialsList && mod && node) {
-                SendMessage(hMaterialsList, LB_RESETCONTENT, 0, 0);
-                const TCHAR* materials = mod->GetMaterialsProperty(node);
-                if (materials && _tcslen(materials) > 0) {
-                    // TODO: Split string and add items to list
+            if (hMaterialsList) {
+                // Get the materials property
+                const TCHAR* materialsStr = mod->GetMaterialsProperty(node);
+                if (materialsStr && _tcslen(materialsStr) > 0) {
+                    // Split the string by commas and add each material to the list
+                    int start = 0;
+                    int end = 0;
+                    WStr materialStr = materialsStr;
+                    while ((end = materialStr.first(',')) != -1) {
+                        WStr materialName = materialStr.Substr(start, end - start);
+                        // Trim whitespace
+                        while (materialName.Length() > 0 && materialName[0] == ' ') {
+                            materialName = materialName.Substr(1, materialName.Length() - 1);
+                        }
+                        while (materialName.Length() > 0 && materialName[materialName.Length() - 1] == ' ') {
+                            materialName = materialName.Substr(0, materialName.Length() - 1);
+                        }
+                        if (materialName.Length() > 0) {
+                            SendMessage(hMaterialsList, LB_ADDSTRING, 0, (LPARAM)materialName.data());
+                        }
+                        start = end + 1;
+                        materialStr = materialStr.Substr(start, materialStr.Length() - start);
+                        start = 0;
+                    }
+                    // Add the last material if there is one
+                    if (materialStr.Length() > 0) {
+                        WStr materialName = materialStr;
+                        // Trim whitespace
+                        while (materialName.Length() > 0 && materialName[0] == ' ') {
+                            materialName = materialName.Substr(1, materialName.Length() - 1);
+                        }
+                        while (materialName.Length() > 0 && materialName[materialName.Length() - 1] == ' ') {
+                            materialName = materialName.Substr(0, materialName.Length() - 1);
+                        }
+                        if (materialName.Length() > 0) {
+                            SendMessage(hMaterialsList, LB_ADDSTRING, 0, (LPARAM)materialName.data());
+                        }
+                    }
                 }
             }
         }
-        break;
+        return TRUE;
 
     case WM_COMMAND:
-        if (LOWORD(wParam) == IDC_CLASS_COMBO && HIWORD(wParam) == CBN_SELCHANGE) {
-            HWND hCombo = GetDlgItem(hWnd, IDC_CLASS_COMBO);
-            if (hCombo) {
-                int index = SendMessage(hCombo, CB_GETCURSEL, 0, 0);
-                if (index >= 0) {
-                    TCHAR buffer[256];
-                    SendMessage(hCombo, CB_GETLBTEXT, index, (LPARAM)buffer);
-                    
-                    // Update both the parameter block and user property
-                    if (mod && node) {
-                        mod->SetClassProperty(node, buffer);
-                        if (mod->GetParamBlock(0)) {
-                            mod->GetParamBlock(0)->SetValue(casavista_class, t, buffer);
+        {
+            // Get the node
+            INode* node = mod->ip->GetSelNode(0);
+            if (!node) return FALSE;
+
+            switch (LOWORD(wParam)) {
+            case IDC_CLASS_COMBO:
+                if (HIWORD(wParam) == CBN_SELCHANGE) {
+                    HWND hCombo = GetDlgItem(hWnd, IDC_CLASS_COMBO);
+                    if (hCombo) {
+                        int index = SendMessage(hCombo, CB_GETCURSEL, 0, 0);
+                        if (index != CB_ERR) {
+                            TCHAR className[256] = { 0 };  // Initialize to zero
+                            SendMessage(hCombo, CB_GETLBTEXT, index, (LPARAM)className);
+                            mod->SetClassProperty(node, className);
                         }
                     }
                 }
-            }
-            return TRUE;
-        }
-        else if (LOWORD(wParam) == IDC_MODELS_ADD) {
-            if (mod) {
-                mod->ShowModelSelectDialog();
-                // Refresh the models list after dialog closes
-                if (node) {
-                    HWND hModelsList = GetDlgItem(hWnd, IDC_MODELS_LIST);
-                    if (hModelsList) {
-                        SendMessage(hModelsList, LB_RESETCONTENT, 0, 0);
-                        const TCHAR* models = mod->GetModelsProperty(node);
-                        if (models && _tcslen(models) > 0) {
-                            WStr modelStr = models;
-                            int start = 0;
-                            int end = 0;
-                            while ((end = modelStr.first(L',')) != -1) {
-                                WStr modelName = modelStr.Substr(start, end - start);
-                                TrimWStr(modelName);
-                                if (modelName.Length() > 0) {
-                                    SendMessage(hModelsList, LB_ADDSTRING, 0, (LPARAM)modelName.data());
-                                }
-                                start = end + 1;
-                                modelStr = modelStr.Substr(start, modelStr.Length() - start);
+                break;
+
+            case IDC_MODELS_ADD:
+                if (mod) {
+                    mod->ShowModelSelectDialog();
+                }
+                break;
+
+            case IDC_MODELS_REMOVE:
+                {
+                    HWND hList = GetDlgItem(hWnd, IDC_MODELS_LIST);
+                    if (hList) {
+                        int index = SendMessage(hList, LB_GETCURSEL, 0, 0);
+                        if (index != LB_ERR) {
+                            SendMessage(hList, LB_DELETESTRING, index, 0);
+                            // Update the models property
+                            WStr modelsStr;
+                            int count = SendMessage(hList, LB_GETCOUNT, 0, 0);
+                            for (int i = 0; i < count; i++) {
+                                TCHAR modelName[256] = { 0 };  // Initialize to zero
+                                SendMessage(hList, LB_GETTEXT, i, (LPARAM)modelName);
+                                if (i > 0) modelsStr += _T(",");
+                                modelsStr += modelName;
                             }
-                            if (modelStr.Length() > 0) {
-                                TrimWStr(modelStr);
-                                if (modelStr.Length() > 0) {
-                                    SendMessage(hModelsList, LB_ADDSTRING, 0, (LPARAM)modelStr.data());
-                                }
-                            }
+                            mod->SetModelsProperty(node, modelsStr.data());
                         }
                     }
                 }
-            }
-            return TRUE;
-        }
-        else if (LOWORD(wParam) == IDC_MODELS_REMOVE) {
-            if (mod && node) {
-                HWND hModelsList = GetDlgItem(hWnd, IDC_MODELS_LIST);
-                if (hModelsList) {
-                    int index = SendMessage(hModelsList, LB_GETCURSEL, 0, 0);
-                    if (index != LB_ERR) {
-                        // Get the selected model name
-                        TCHAR buffer[256];
-                        SendMessage(hModelsList, LB_GETTEXT, index, (LPARAM)buffer);
-                        
-                        // Get current models string
-                        TSTR currentModels = mod->GetModelsProperty(node);
-                        
-                        // Remove the selected model from the string
-                        WStr modelStr = currentModels;
-                        WStr modelToRemove = buffer;
-                        int start = 0;
-                        int end = 0;
-                        TSTR newModels;
-                        bool first = true;
-                        
-                        while ((end = modelStr.first(L',')) != -1) {
-                            WStr modelName = modelStr.Substr(start, end - start);
-                            TrimWStr(modelName);
-                            if (modelName.Length() > 0 && _tcscmp(modelName.data(), modelToRemove.data()) != 0) {
-                                if (!first) {
-                                    newModels += _T(",");
-                                }
-                                newModels += modelName.data();
-                                first = false;
+                break;
+
+            case IDC_MATERIALS_ADD:
+                if (mod) {
+                    mod->ShowMaterialSelectDialog();
+                }
+                break;
+
+            case IDC_MATERIALS_REMOVE:
+                {
+                    HWND hList = GetDlgItem(hWnd, IDC_MATERIALS_LIST);
+                    if (hList) {
+                        int index = SendMessage(hList, LB_GETCURSEL, 0, 0);
+                        if (index != LB_ERR) {
+                            SendMessage(hList, LB_DELETESTRING, index, 0);
+                            // Update the materials property
+                            WStr materialsStr;
+                            int count = SendMessage(hList, LB_GETCOUNT, 0, 0);
+                            for (int i = 0; i < count; i++) {
+                                TCHAR materialName[256] = { 0 };  // Initialize to zero
+                                SendMessage(hList, LB_GETTEXT, i, (LPARAM)materialName);
+                                if (i > 0) materialsStr += _T(",");
+                                materialsStr += materialName;
                             }
-                            start = end + 1;
-                            modelStr = modelStr.Substr(start, modelStr.Length() - start);
+                            mod->SetMaterialsProperty(node, materialsStr.data());
                         }
-                        
-                        // Check the last model
-                        if (modelStr.Length() > 0) {
-                            TrimWStr(modelStr);
-                            if (modelStr.Length() > 0 && _tcscmp(modelStr.data(), modelToRemove.data()) != 0) {
-                                if (!first) {
-                                    newModels += _T(",");
-                                }
-                                newModels += modelStr.data();
-                            }
-                        }
-                        
-                        // Update the property
-                        mod->SetModelsProperty(node, newModels);
-                        
-                        // Update the list
-                        SendMessage(hModelsList, LB_DELETESTRING, index, 0);
                     }
                 }
+                break;
             }
-            return TRUE;
         }
-        else if (LOWORD(wParam) == IDC_MATERIALS_ADD) {
-            if (mod) {
-                mod->ShowMaterialSelectDialog();
-            }
-            return TRUE;
-        }
-        break;
+        return TRUE;
+
+    case WM_DESTROY:
+        return TRUE;
     }
     return FALSE;
 }
@@ -797,8 +801,9 @@ INT_PTR CALLBACK MaterialSelectDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARA
                             int count = SendMessage(hList, LB_GETCOUNT, 0, 0);
                             bool found = false;
                             for (int j = 0; j < count; j++) {
-                                TCHAR existingName[256];
+                                TCHAR existingName[256] = { 0 };
                                 SendMessage(hList, LB_GETTEXT, j, (LPARAM)existingName);
+                                existingName[255] = 0; // Ensure null-termination
                                 if (_tcscmp(existingName, name.data()) == 0) {
                                     found = true;
                                     break;
