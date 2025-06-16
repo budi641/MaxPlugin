@@ -130,6 +130,8 @@ public:
     void ShowModelSelectDialog();
     void ShowMaterialSelectDialog();
 
+    RefResult NotifyRefChanged(const Interval& changeInt, RefTargetHandle hTarget, PartID& partID, RefMessage message, BOOL propagate) override;
+
 public:
     static IObjParam* ip; 
 private:
@@ -406,6 +408,22 @@ void CasavistaMod::ShowMaterialSelectDialog()
     // Create and show the material selection dialog
     DialogBoxParam(hInstance, MAKEINTRESOURCE(IDD_MATERIAL_SELECT), 
         ip->GetMAXHWnd(), (DLGPROC)MaterialSelectDlgProc, (LPARAM)this);
+}
+
+RefResult CasavistaMod::NotifyRefChanged(const Interval& changeInt, RefTargetHandle hTarget, PartID& partID, RefMessage message, BOOL propagate) {
+    if (message == REFMSG_TARGET_DELETED) {
+        if (ip) {
+            INode* node = ip->GetSelNode(0);
+            if (node) {
+                node->SetUserPropBool(_T("HasCasavistaMod"), FALSE);
+                node->SetUserPropString(_T("HasCasavistaMod"), NULL);
+                node->SetUserPropString(_T("CasavistaClass"), NULL);
+                node->SetUserPropString(_T("CasavistaModels"), NULL);
+                node->SetUserPropString(_T("CasavistaMaterials"), NULL);
+            }
+        }
+    }
+    return REF_SUCCEED;
 }
 
 // CasavistaClassDesc Methods Implementations
