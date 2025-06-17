@@ -711,33 +711,19 @@ void AddGeometryNodesToList(INode* node, HWND hList)
 {
     if (!node) return;
 
-    // Debug output for node name
     TCHAR debugBuffer[1024];
     _stprintf_s(debugBuffer, _T("[Casavista] Processing node: %s\n"), node->GetName());
     OutputDebugString(debugBuffer);
 
-    // Get the object reference
-    Object* obj = node->GetObjectRef();
-    if (obj) {
-        // Get the base object by following the reference chain
-        int depth = 0;
-        while (obj && obj->SuperClassID() == OSM_CLASS_ID) {
-            _stprintf_s(debugBuffer, _T("[Casavista]   Following modifier chain, depth: %d, class: %d\n"), depth, obj->SuperClassID());
-            OutputDebugString(debugBuffer);
-            obj = (Object*)obj->GetReference(0);
-            depth++;
-        }
+    Object* obj = node->EvalWorldState(0).obj;
+    _stprintf_s(debugBuffer, _T("[Casavista]   EvalWorldState: SuperClassID=%d, ClassID=(0x%08x, 0x%08x)\n"),
+        obj ? obj->SuperClassID() : -1, obj ? obj->ClassID().PartA() : 0, obj ? obj->ClassID().PartB() : 0);
+    OutputDebugString(debugBuffer);
 
-        _stprintf_s(debugBuffer, _T("[Casavista]   Base object class: %d\n"), obj ? obj->SuperClassID() : -1);
+    if (obj && obj->SuperClassID() == GEOMOBJECT_CLASS_ID) {
+        _stprintf_s(debugBuffer, _T("[Casavista]   Adding geometry node: %s\n"), node->GetName());
         OutputDebugString(debugBuffer);
-        
-        // Check if this is a geometry node
-        if (obj && obj->SuperClassID() == GEOMOBJECT_CLASS_ID) {
-            _stprintf_s(debugBuffer, _T("[Casavista]   Adding geometry node: %s\n"), node->GetName());
-            OutputDebugString(debugBuffer);
-            // Add the node name to the list regardless of whether it has the modifier or not
-            SendMessage(hList, LB_ADDSTRING, 0, (LPARAM)node->GetName());
-        }
+        SendMessage(hList, LB_ADDSTRING, 0, (LPARAM)node->GetName());
     }
 
     // Process child nodes
