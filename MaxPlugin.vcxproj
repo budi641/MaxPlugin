@@ -154,7 +154,7 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableUAC>false</EnableUAC>
       <AdditionalLibraryDirectories>C:\Autodesk\3dsMaxSDK\2024\maxsdk\lib\x64\Release;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>core.lib;maxutil.lib;paramblk2.lib;Geom.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>core.lib;maxutil.lib;paramblk2.lib;Geom.lib;mesh.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <ModuleDefinitionFile>casavista.def</ModuleDefinitionFile>
     </Link>
   </ItemDefinitionGroup>

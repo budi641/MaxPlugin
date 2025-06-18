@@ -25,6 +25,8 @@
 #define IDC_MATERIAL_INDEX                  1008
 #define IDC_MATERIAL_INDEX_EDIT             1009
 #define IDC_MATERIAL_INDEX_SPIN             1010
+#define IDS_CASAVISTA_CATEGORY                20
+#define IDS_PLAYERSTART_OBJECT                21
 
 // Next default values for new objects
 // 
