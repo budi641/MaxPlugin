@@ -6,6 +6,8 @@
 #include "simpobj.h"
 #include "iparamm2.h"
 #include "mesh.h"
+#include <iostream>
+#include <vector>
 
 // Helper function for debug output
 void DebugOutput(const TCHAR* format, ...) {
@@ -522,9 +524,14 @@ INT_PTR CasavistaDlgProc::DlgProc(TimeValue t, IParamMap2* map, HWND hWnd, UINT 
                 {
                     HWND hList = GetDlgItem(hWnd, IDC_MODELS_LIST);
                     if (hList) {
-                        int index = SendMessage(hList, LB_GETCURSEL, 0, 0);
-                        if (index != LB_ERR) {
-                            SendMessage(hList, LB_DELETESTRING, index, 0);
+                        int selCount = SendMessage(hList, LB_GETSELCOUNT, 0, 0);
+                        if (selCount > 0) {
+                            std::vector<int> selItems(selCount);
+                            SendMessage(hList, LB_GETSELITEMS, (WPARAM)selCount, (LPARAM)selItems.data());
+                            std::sort(selItems.rbegin(), selItems.rend());
+                            for (int i = 0; i < selCount; ++i) {
+                                SendMessage(hList, LB_DELETESTRING, selItems[i], 0);
+                            }
                             // Update the models property
                             WStr modelsStr;
                             int count = SendMessage(hList, LB_GETCOUNT, 0, 0);
@@ -553,9 +560,14 @@ INT_PTR CasavistaDlgProc::DlgProc(TimeValue t, IParamMap2* map, HWND hWnd, UINT 
                 {
                     HWND hList = GetDlgItem(hWnd, IDC_MATERIALS_LIST);
                     if (hList) {
-                        int index = SendMessage(hList, LB_GETCURSEL, 0, 0);
-                        if (index != LB_ERR) {
-                            SendMessage(hList, LB_DELETESTRING, index, 0);
+                        int selCount = SendMessage(hList, LB_GETSELCOUNT, 0, 0);
+                        if (selCount > 0) {
+                            std::vector<int> selItems(selCount);
+                            SendMessage(hList, LB_GETSELITEMS, (WPARAM)selCount, (LPARAM)selItems.data());
+                            std::sort(selItems.rbegin(), selItems.rend());
+                            for (int i = 0; i < selCount; ++i) {
+                                SendMessage(hList, LB_DELETESTRING, selItems[i], 0);
+                            }
                             // Update the materials property
                             WStr materialsStr;
                             int count = SendMessage(hList, LB_GETCOUNT, 0, 0);
@@ -902,34 +914,27 @@ INT_PTR CALLBACK ModelSelectDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM l
 
     case WM_COMMAND:
         if (LOWORD(wParam) == IDOK) {
-            // Get the selected model
             HWND hList = GetDlgItem(hWnd, IDC_MODELS_LIST);
             if (hList) {
-                int index = SendMessage(hList, LB_GETCURSEL, 0, 0);
-                if (index != LB_ERR) {
-                    TCHAR buffer[256];
-                    SendMessage(hList, LB_GETTEXT, index, (LPARAM)buffer);
-                    
-                    // Get the current node
+                int selCount = SendMessage(hList, LB_GETSELCOUNT, 0, 0);
+                if (selCount > 0) {
+                    std::vector<int> selItems(selCount);
+                    SendMessage(hList, LB_GETSELITEMS, (WPARAM)selCount, (LPARAM)selItems.data());
                     INode* node = mod->ip->GetSelNode(0);
                     if (node) {
-                        // Get current models string
                         TSTR currentModels = mod->GetModelsProperty(node);
-                        
-                        // Add the new model to the list
-                        if (currentModels.Length() > 0) {
-                            currentModels += _T(",");
+                        for (int i = 0; i < selCount; ++i) {
+                            TCHAR buffer[256];
+                            SendMessage(hList, LB_GETTEXT, selItems[i], (LPARAM)buffer);
+                            if (currentModels.Length() > 0) currentModels += _T(",");
+                            currentModels += buffer;
+                            // Also update the main dialog's list
+                            HWND hMainList = GetDlgItem(GetParent(hWnd), IDC_MODELS_LIST);
+                            if (hMainList) {
+                                SendMessage(hMainList, LB_ADDSTRING, 0, (LPARAM)buffer);
+                            }
                         }
-                        currentModels += buffer;
-                        
-                        // Update the property
                         mod->SetModelsProperty(node, currentModels);
-                        
-                        // Update the main dialog's list
-                        HWND hMainList = GetDlgItem(GetParent(hWnd), IDC_MODELS_LIST);
-                        if (hMainList) {
-                            SendMessage(hMainList, LB_ADDSTRING, 0, (LPARAM)buffer);
-                        }
                     }
                 }
             }
@@ -1050,41 +1055,32 @@ INT_PTR CALLBACK MaterialSelectDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARA
 
     case WM_COMMAND:
         if (LOWORD(wParam) == IDOK) {
-            // Get the selected material
             HWND hList = GetDlgItem(hWnd, IDC_MATERIALS_LIST);
             if (hList) {
-                int index = SendMessage(hList, LB_GETCURSEL, 0, 0);
-                if (index != LB_ERR) {
-                    TCHAR buffer[256];
-                    SendMessage(hList, LB_GETTEXT, index, (LPARAM)buffer);
-                    
-                    // Get the material index
+                int selCount = SendMessage(hList, LB_GETSELCOUNT, 0, 0);
+                if (selCount > 0) {
+                    std::vector<int> selItems(selCount);
+                    SendMessage(hList, LB_GETSELITEMS, (WPARAM)selCount, (LPARAM)selItems.data());
                     HWND hEdit = GetDlgItem(hWnd, IDC_MATERIAL_INDEX_EDIT);
+                    int materialIndex = 0;
                     if (hEdit) {
                         TCHAR indexBuffer[32];
                         GetWindowText(hEdit, indexBuffer, 32);
-                        int materialIndex = _ttoi(indexBuffer);
-                        
-                        // Get the current node
-                        INode* node = mod->ip->GetSelNode(0);
-                        if (node) {
-                            // Get current materials string
-                            TSTR currentMaterials = mod->GetMaterialsProperty(node);
-                            
-                            // Add the new material to the list
-                            if (currentMaterials.Length() > 0) {
-                                currentMaterials += _T(",");
-                            }
+                        materialIndex = _ttoi(indexBuffer);
+                    }
+                    INode* node = mod->ip->GetSelNode(0);
+                    if (node) {
+                        TSTR currentMaterials = mod->GetMaterialsProperty(node);
+                        for (int i = 0; i < selCount; ++i) {
+                            TCHAR buffer[256];
+                            SendMessage(hList, LB_GETTEXT, selItems[i], (LPARAM)buffer);
+                            if (currentMaterials.Length() > 0) currentMaterials += _T(",");
                             currentMaterials += buffer;
                             currentMaterials += _T(":");
                             TCHAR indexStr[32];
                             _stprintf_s(indexStr, _T("%d"), materialIndex);
                             currentMaterials += indexStr;
-                            
-                            // Update the property
-                            mod->SetMaterialsProperty(node, currentMaterials);
-                            
-                            // Update the main dialog's list
+                            // Also update the main dialog's list
                             HWND hMainList = GetDlgItem(GetParent(hWnd), IDC_MATERIALS_LIST);
                             if (hMainList) {
                                 TCHAR displayBuffer[512];
@@ -1092,6 +1088,7 @@ INT_PTR CALLBACK MaterialSelectDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARA
                                 SendMessage(hMainList, LB_ADDSTRING, 0, (LPARAM)displayBuffer);
                             }
                         }
+                        mod->SetMaterialsProperty(node, currentMaterials);
                     }
                 }
             }
