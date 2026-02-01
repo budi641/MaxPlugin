@@ -1,11 +1,13 @@
 #define NOMINMAX  // Prevent min/max macro warnings
 
+#ifndef EN_CHANGE
+#define EN_CHANGE 0x0300
+#endif
+
 #include "max.h"
 #include "resource.h"
 #include "simpmod.h"
-#include "simpobj.h"
 #include "iparamm2.h"
-#include "mesh.h"
 #include <iostream>
 #include <vector>
 
@@ -45,6 +47,8 @@ enum {
 static const TCHAR* classNames[] = {
     _T("None"),
     _T("Interactable"),
+    _T("Vegetation"),
+    _T("Door"),
     NULL
 };
 
@@ -58,10 +62,31 @@ class CasavistaPBAccessor;
 INT_PTR CALLBACK ModelSelectDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 INT_PTR CALLBACK MaterialSelectDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
-// Forward declaration for helper function
-void AddGeometryNodesToList(INode* node, HWND hList);
+// Forward declarations for helper functions
+void AddGeometryNodesToList(INode* node, HWND hList, const TCHAR* filter);
+void AddMaterialsToList(HWND hList, IObjParam* ip, const TCHAR* filter);
 void UpdateModelsListBox(HWND hWnd, CasavistaMod* mod, INode* node);
 void UpdateMaterialsListBox(HWND hWnd, CasavistaMod* mod, INode* node);
+
+// Helper: true if sub is empty or str contains sub (case-insensitive)
+static bool StringContainsIgnoreCase(const TCHAR* str, const TCHAR* sub) {
+    if (!sub || !*sub) return true;
+    if (!str) return false;
+    size_t len = _tcslen(str), sublen = _tcslen(sub);
+    if (sublen > len) return false;
+    for (size_t i = 0; i <= len - sublen; i++) {
+        if (_tcsnicmp(str + i, sub, (int)sublen) == 0) return true;
+    }
+    return false;
+}
+
+// Helper: replace spaces with underscores in a null-terminated string (in-place)
+void ReplaceSpacesWithUnderscores(TCHAR* str) {
+    if (!str) return;
+    for (TCHAR* p = str; *p; ++p) {
+        if (*p == _T(' ')) *p = _T('_');
+    }
+}
 
 // Helper function to trim whitespace from a WStr
 void TrimWStr(WStr& str) {
@@ -475,10 +500,14 @@ INT_PTR CasavistaDlgProc::DlgProc(TimeValue t, IParamMap2* map, HWND hWnd, UINT 
                 SendMessage(hCombo, CB_RESETCONTENT, 0, 0);
                 SendMessage(hCombo, CB_ADDSTRING, 0, (LPARAM)_T("None"));
                 SendMessage(hCombo, CB_ADDSTRING, 0, (LPARAM)_T("Interactable"));
+                SendMessage(hCombo, CB_ADDSTRING, 0, (LPARAM)_T("Vegetation"));
+                SendMessage(hCombo, CB_ADDSTRING, 0, (LPARAM)_T("Door"));
                 // Set selection based on user property
                 TSTR classProp = mod->GetClassProperty(node);
                 int selIndex = 0;
                 if (!_tcsicmp(classProp, _T("Interactable"))) selIndex = 1;
+                else if (!_tcsicmp(classProp, _T("Vegetation"))) selIndex = 2;
+                else if (!_tcsicmp(classProp, _T("Door"))) selIndex = 3;
                 SendMessage(hCombo, CB_SETCURSEL, selIndex, 0);
             }
 
@@ -538,6 +567,7 @@ INT_PTR CasavistaDlgProc::DlgProc(TimeValue t, IParamMap2* map, HWND hWnd, UINT 
                             for (int i = 0; i < count; i++) {
                                 TCHAR modelName[256] = { 0 };
                                 SendMessage(hList, LB_GETTEXT, i, (LPARAM)modelName);
+                                ReplaceSpacesWithUnderscores(modelName);
                                 if (i > 0) modelsStr += _T(",");
                                 modelsStr += modelName;
                             }
@@ -616,256 +646,11 @@ void CasavistaPBAccessor::Set(PB2Value& v, ReferenceMaker* owner, ParamID id, in
 // GetCasavistaDesc Implementation
 ClassDesc2* GetCasavistaDesc() { return &CasavistaDesc; }
 
-// --- PlayerStartObject Implementation ---
-
-#define PLAYERSTART_CID Class_ID(0x234567, 0x234567)
-
-class PlayerStartObject : public SimpleObject2 {
-public:
-    bool propertySet;
-    PlayerStartObject() : propertySet(false) {
-        Interface* ip = GetCOREInterface();
-        if (ip) {
-            INode* node = ip->GetSelNode(0);
-            if (node && node->GetObjectRef() == this) {
-                node->SetUserPropString(_T("CasavistaClass"), _T("PlayerStart"));
-                propertySet = true;
-            }
-        }
-    }
-    ~PlayerStartObject() {}
-    void DeleteThis() override { delete this; }
-    void GetClassName(MSTR& s, bool localized) const override { s = localized ? GetString(IDS_PLAYERSTART_OBJECT) : _T("Player Start"); }
-    SClass_ID SuperClassID() override { return GEOMOBJECT_CLASS_ID; }
-    Class_ID ClassID() override { return PLAYERSTART_CID; }
-    const TCHAR* Category() { return GetString(IDS_CASAVISTA_CATEGORY); }
-    const TCHAR* GetObjectName(bool localized) const override { return localized ? GetString(IDS_PLAYERSTART_OBJECT) : _T("Player Start"); }
-    void BuildMesh(TimeValue t);
-    void NotifyPostCreateNode(INode* node);
-    CreateMouseCallBack* GetCreateMouseCallBack() override { return nullptr; }
-    BOOL HasUVW() override { return FALSE; }
-    void SetGenUVW(BOOL sw) override {}
-};
-
-class PlayerStartClassDesc : public ClassDesc2 {
-public:
-    int IsPublic() override { return 1; }
-    void* Create(BOOL loading = FALSE) override { return new PlayerStartObject(); }
-    const TCHAR* ClassName() override { return GetString(IDS_PLAYERSTART_OBJECT); }
-    SClass_ID SuperClassID() override { return GEOMOBJECT_CLASS_ID; }
-    Class_ID ClassID() override { return PLAYERSTART_CID; }
-    const TCHAR* Category() { return GetString(IDS_CASAVISTA_CATEGORY); }
-    const TCHAR* InternalName() override { return _T("PlayerStartObject"); }
-    HINSTANCE HInstance() override { return hInstance; }
-    const TCHAR* NonLocalizedClassName() override { return _T("PlayerStartObject"); }
-};
-
-static PlayerStartClassDesc playerStartDesc;
-ClassDesc2* GetPlayerStartDesc() { return &playerStartDesc; }
-
-// --- Mesh Building for Capsule + Arrow ---
-void PlayerStartObject::BuildMesh(TimeValue t) {
-    // Set user property on first mesh build
-    if (!propertySet) {
-        Interface* ip = GetCOREInterface();
-        if (ip) {
-            INode* node = ip->GetSelNode(0);
-            if (node && node->GetObjectRef() == this) {
-                node->SetUserPropString(_T("CasavistaClass"), _T("PlayerStart"));
-                propertySet = true;
-            }
-        }
-    }
-    // Capsule parameters
-    const float capsuleRadius = 45.0f; // cm
-    const float capsuleHalfHeight = 90.0f; // cm
-    const float capsuleHeight = capsuleHalfHeight * 2.0f;
-    const int capsuleSides = 24;
-    const int capsuleSegments = 8; // for hemispheres
-    // Arrow parameters
-    const float arrowLength = 60.0f; // cm
-    const float arrowRadius = 8.0f; // cm
-    const float coneLength = 18.0f; // cm
-    const float coneRadius = 18.0f; // cm
-
-    // Pivot at bottom: offset all Z by capsuleRadius
-    const float zOffset = capsuleRadius;
-
-    // --- Calculate mesh sizes ---
-    int cylVerts = (capsuleSides + 1) * 2;
-    int cylFaces = capsuleSides * 2;
-    int hemiVerts = (capsuleSides + 1) * (capsuleSegments + 1);
-    int hemiFaces = capsuleSides * capsuleSegments * 2; // 2 triangles per quad
-    int arrowVerts = (capsuleSides + 1) * 2;
-    int arrowFaces = capsuleSides * 2;
-    int coneVerts = capsuleSides + 2;
-    int coneFaces = capsuleSides;
-    int totalVerts = cylVerts + hemiVerts * 2 + arrowVerts + coneVerts;
-    int totalFaces = cylFaces + hemiFaces * 2 + arrowFaces + coneFaces;
-
-    mesh.setNumVerts(totalVerts);
-    mesh.setNumFaces(totalFaces);
-
-    int v = 0, f = 0;
-
-    // --- Capsule Cylinder (vertical, Z axis) ---
-    float cylZ0 = zOffset;
-    float cylZ1 = capsuleHeight + zOffset;
-    for (int i = 0; i <= capsuleSides; ++i) {
-        float angle = 2.0f * PI * float(i) / float(capsuleSides);
-        float x = capsuleRadius * cosf(angle);
-        float y = capsuleRadius * sinf(angle);
-        mesh.setVert(v + i, Point3(x, y, cylZ0));
-        mesh.setVert(v + i + capsuleSides + 1, Point3(x, y, cylZ1));
-    }
-    for (int i = 0; i < capsuleSides; ++i) {
-        int i0 = v + i;
-        int i1 = v + (i + 1);
-        int i2 = v + i + capsuleSides + 1;
-        int i3 = v + (i + 1) + capsuleSides + 1;
-        mesh.faces[f].setVerts(i0, i1, i2);
-        mesh.faces[f].setEdgeVisFlags(1, 1, 0);
-        mesh.faces[f].setSmGroup(1);
-        ++f;
-        mesh.faces[f].setVerts(i1, i3, i2);
-        mesh.faces[f].setEdgeVisFlags(1, 1, 0);
-        mesh.faces[f].setSmGroup(1);
-        ++f;
-    }
-    v += (capsuleSides + 1) * 2;
-    if (v > totalVerts || f > totalFaces) DebugOutput(_T("ERROR: After cylinder v=%d/%d f=%d/%d\n"), v, totalVerts, f, totalFaces);
-    DebugOutput(_T("After cylinder: v=%d, f=%d\n"), v, f);
-
-    // --- Top Hemisphere (Z+) ---
-    int topStart = v;
-    float topCenterZ = capsuleHeight + zOffset;
-    for (int y = 0; y <= capsuleSegments; ++y) {
-        float phi = (PI / 2.0f) * (float(y) / float(capsuleSegments));
-        float z = topCenterZ + capsuleRadius * sinf(phi);
-        float r = capsuleRadius * cosf(phi);
-        for (int i = 0; i <= capsuleSides; ++i) {
-            float angle = 2.0f * PI * float(i) / float(capsuleSides);
-            float x = r * cosf(angle);
-            float y = r * sinf(angle);
-            mesh.setVert(v++, Point3(x, y, z));
-        }
-    }
-    for (int y = 0; y < capsuleSegments; ++y) {
-        for (int i = 0; i < capsuleSides; ++i) {
-            int row1 = topStart + y * (capsuleSides + 1);
-            int row2 = topStart + (y + 1) * (capsuleSides + 1);
-            mesh.faces[f].setVerts(row1 + i, row1 + i + 1, row2 + i);
-            mesh.faces[f].setEdgeVisFlags(1, 1, 0);
-            mesh.faces[f].setSmGroup(2);
-            ++f;
-            mesh.faces[f].setVerts(row1 + i + 1, row2 + i + 1, row2 + i);
-            mesh.faces[f].setEdgeVisFlags(1, 1, 0);
-            mesh.faces[f].setSmGroup(2);
-            ++f;
-        }
-    }
-    if (v > totalVerts || f > totalFaces) DebugOutput(_T("ERROR: After top hemi v=%d/%d f=%d/%d\n"), v, totalVerts, f, totalFaces);
-    DebugOutput(_T("After top hemisphere: v=%d, f=%d\n"), v, f);
-
-    // --- Bottom Hemisphere (Z-) ---
-    int bottomStart = v;
-    float bottomCenterZ = zOffset;
-    for (int y = 0; y <= capsuleSegments; ++y) {
-        float phi = (PI / 2.0f) * (float(y) / float(capsuleSegments));
-        float z = bottomCenterZ - capsuleRadius * sinf(phi);
-        float r = capsuleRadius * cosf(phi);
-        for (int i = 0; i <= capsuleSides; ++i) {
-            float angle = 2.0f * PI * float(i) / float(capsuleSides);
-            float x = r * cosf(angle);
-            float y = r * sinf(angle);
-            mesh.setVert(v++, Point3(x, y, z));
-        }
-    }
-    for (int y = 0; y < capsuleSegments; ++y) {
-        for (int i = 0; i < capsuleSides; ++i) {
-            int row1 = bottomStart + y * (capsuleSides + 1);
-            int row2 = bottomStart + (y + 1) * (capsuleSides + 1);
-            mesh.faces[f].setVerts(row1 + i, row2 + i, row1 + i + 1);
-            mesh.faces[f].setEdgeVisFlags(1, 1, 0);
-            mesh.faces[f].setSmGroup(3);
-            ++f;
-            mesh.faces[f].setVerts(row1 + i + 1, row2 + i, row2 + i + 1);
-            mesh.faces[f].setEdgeVisFlags(1, 1, 0);
-            mesh.faces[f].setSmGroup(3);
-            ++f;
-        }
-    }
-    if (v > totalVerts || f > totalFaces) DebugOutput(_T("ERROR: After bottom hemi v=%d/%d f=%d/%d\n"), v, totalVerts, f, totalFaces);
-    DebugOutput(_T("After bottom hemisphere: v=%d, f=%d\n"), v, f);
-
-    // --- Arrow shaft (cylinder along +Y, starts at capsule center) ---
-    int arrowStart = v;
-    float shaftY0 = 0.0f + 45.0f;
-    float shaftY1 = arrowLength - coneLength + 45.0f;
-    float arrowZ = capsuleHalfHeight + zOffset; // center of capsule
-    for (int i = 0; i <= capsuleSides; ++i) {
-        float angle = 2.0f * PI * float(i) / float(capsuleSides);
-        float x = arrowRadius * cosf(angle);
-        float z = arrowRadius * sinf(angle);
-        mesh.setVert(v + i, Point3(x, shaftY0, arrowZ + z));
-        mesh.setVert(v + i + capsuleSides + 1, Point3(x, shaftY1, arrowZ + z));
-    }
-    for (int i = 0; i < capsuleSides; ++i) {
-        int i0 = arrowStart + i;
-        int i1 = arrowStart + (i + 1);
-        int i2 = arrowStart + i + capsuleSides + 1;
-        int i3 = arrowStart + (i + 1) + capsuleSides + 1;
-        mesh.faces[f].setVerts(i0, i1, i2);
-        mesh.faces[f].setEdgeVisFlags(1, 1, 0);
-        mesh.faces[f].setSmGroup(4);
-        ++f;
-        mesh.faces[f].setVerts(i1, i3, i2);
-        mesh.faces[f].setEdgeVisFlags(1, 1, 0);
-        mesh.faces[f].setSmGroup(4);
-        ++f;
-    }
-    v += (capsuleSides + 1) * 2;
-    if (v > totalVerts || f > totalFaces) DebugOutput(_T("ERROR: After arrow shaft v=%d/%d f=%d/%d\n"), v, totalVerts, f, totalFaces);
-    DebugOutput(_T("After arrow shaft: v=%d, f=%d\n"), v, f);
-
-    // --- Arrow head (cone, points +Y, starts at shaft end) ---
-    int coneBase = v;
-    mesh.setVert(v++, Point3(0.0f, arrowLength + 45.0f, arrowZ)); // tip
-    for (int i = 0; i <= capsuleSides; ++i) {
-        float angle = 2.0f * PI * float(i) / float(capsuleSides);
-        float x = coneRadius * cosf(angle);
-        float z = coneRadius * sinf(angle);
-        mesh.setVert(v++, Point3(x, arrowLength - coneLength + 45.0f, arrowZ + z));
-    }
-    for (int i = 0; i < capsuleSides; ++i) {
-        int tip = coneBase;
-        int base0 = coneBase + 1 + i;
-        int base1 = coneBase + 1 + ((i + 1) % (capsuleSides + 1));
-        mesh.faces[f].setVerts(tip, base0, base1);
-        mesh.faces[f].setEdgeVisFlags(1, 1, 0);
-        mesh.faces[f].setSmGroup(5);
-        ++f;
-    }
-    if (v > totalVerts || f > totalFaces) DebugOutput(_T("ERROR: After arrow cone v=%d/%d f=%d/%d\n"), v, totalVerts, f, totalFaces);
-    DebugOutput(_T("After arrow cone: v=%d, f=%d\n"), v, f);
-
-    mesh.InvalidateGeomCache();
-    mesh.buildBoundingBox();
-    DebugOutput(_T("PlayerStart mesh: %d verts, %d faces\n"), mesh.getNumVerts(), mesh.getNumFaces());
-}
-
-void PlayerStartObject::NotifyPostCreateNode(INode* node) {
-    if (node) {
-        node->SetUserPropString(_T("CasavistaClass"), _T("PlayerStart"));
-    }
-}
-
-// --- DLL Exports Update ---
-__declspec( dllexport ) int LibNumberClasses() { return 2; }
+// --- DLL Exports ---
+__declspec( dllexport ) int LibNumberClasses() { return 1; }
 __declspec( dllexport ) ClassDesc *LibClassDesc(int i) {
     switch(i) {
         case 0: return GetCasavistaDesc();
-        case 1: return GetPlayerStartDesc();
         default: return 0;
     }
 }
@@ -903,9 +688,10 @@ INT_PTR CALLBACK ModelSelectDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM l
                 // Get the root node
                 INode* rootNode = ip->GetRootNode();
                 if (rootNode) {
+                    TCHAR searchBuf[256] = { 0 };
+                    GetWindowText(GetDlgItem(hWnd, IDC_MODEL_SEARCH), searchBuf, 256);
                     DebugOutput(_T("Starting to populate models list\n"));
-                    // Add all geometry nodes to the list
-                    AddGeometryNodesToList(rootNode, hList);
+                    AddGeometryNodesToList(rootNode, hList, searchBuf);
                     DebugOutput(_T("Finished populating models list\n"));
                 }
             }
@@ -913,6 +699,19 @@ INT_PTR CALLBACK ModelSelectDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM l
         return TRUE;
 
     case WM_COMMAND:
+        if (LOWORD(wParam) == IDC_MODEL_SEARCH && HIWORD(wParam) == EN_CHANGE) {
+            if (mod && mod->ip) {
+                HWND hList = GetDlgItem(hWnd, IDC_MODELS_LIST);
+                INode* root = mod->ip->GetRootNode();
+                if (hList && root) {
+                    TCHAR searchBuf[256] = { 0 };
+                    GetWindowText(GetDlgItem(hWnd, IDC_MODEL_SEARCH), searchBuf, 256);
+                    SendMessage(hList, LB_RESETCONTENT, 0, 0);
+                    AddGeometryNodesToList(root, hList, searchBuf);
+                }
+            }
+            return TRUE;
+        }
         if (LOWORD(wParam) == IDOK) {
             HWND hList = GetDlgItem(hWnd, IDC_MODELS_LIST);
             if (hList) {
@@ -926,6 +725,7 @@ INT_PTR CALLBACK ModelSelectDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM l
                         for (int i = 0; i < selCount; ++i) {
                             TCHAR buffer[256];
                             SendMessage(hList, LB_GETTEXT, selItems[i], (LPARAM)buffer);
+                            ReplaceSpacesWithUnderscores(buffer);
                             if (currentModels.Length() > 0) currentModels += _T(",");
                             currentModels += buffer;
                             // Also update the main dialog's list
@@ -950,8 +750,8 @@ INT_PTR CALLBACK ModelSelectDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM l
     return FALSE;
 }
 
-// Helper function to recursively add geometry nodes to the list
-void AddGeometryNodesToList(INode* node, HWND hList)
+// Helper function to recursively add geometry nodes to the list (filter: null/empty = all; otherwise case-insensitive substring match)
+void AddGeometryNodesToList(INode* node, HWND hList, const TCHAR* filter)
 {
     if (!node) return;
 
@@ -965,14 +765,50 @@ void AddGeometryNodesToList(INode* node, HWND hList)
     OutputDebugString(debugBuffer);
 
     if (obj && obj->SuperClassID() == GEOMOBJECT_CLASS_ID) {
-        _stprintf_s(debugBuffer, _T("[Casavista]   Adding geometry node: %s\n"), node->GetName());
-        OutputDebugString(debugBuffer);
-        SendMessage(hList, LB_ADDSTRING, 0, (LPARAM)node->GetName());
+        if (StringContainsIgnoreCase(node->GetName(), filter)) {
+            _stprintf_s(debugBuffer, _T("[Casavista]   Adding geometry node: %s\n"), node->GetName());
+            OutputDebugString(debugBuffer);
+            SendMessage(hList, LB_ADDSTRING, 0, (LPARAM)node->GetName());
+        }
     }
 
     // Process child nodes
     for (int i = 0; i < node->NumberOfChildren(); i++) {
-        AddGeometryNodesToList(node->GetChildNode(i), hList);
+        AddGeometryNodesToList(node->GetChildNode(i), hList, filter);
+    }
+}
+
+// Populate materials list from editor and scene; filter: null/empty = all, else case-insensitive substring match
+void AddMaterialsToList(HWND hList, IObjParam* ip, const TCHAR* filter)
+{
+    if (!hList || !ip) return;
+    SendMessage(hList, LB_RESETCONTENT, 0, 0);
+
+    const MtlBaseLib& editorMtlLib = ip->GetMaterialLibrary();
+    for (int i = 0; i < editorMtlLib.Count(); i++) {
+        MtlBase* mtl = editorMtlLib[i];
+        if (mtl && StringContainsIgnoreCase(mtl->GetName().data(), filter)) {
+            SendMessage(hList, LB_ADDSTRING, 0, (LPARAM)mtl->GetName().data());
+        }
+    }
+
+    MtlBaseLib* sceneMtlLib = ip->GetSceneMtls();
+    if (sceneMtlLib) {
+        for (int i = 0; i < sceneMtlLib->Count(); i++) {
+            MtlBase* mtl = (*sceneMtlLib)[i];
+            if (!mtl || !StringContainsIgnoreCase(mtl->GetName().data(), filter)) continue;
+            MSTR name = mtl->GetName();
+            int count = SendMessage(hList, LB_GETCOUNT, 0, 0);
+            bool found = false;
+            for (int j = 0; j < count; j++) {
+                TCHAR existing[256] = { 0 };
+                SendMessage(hList, LB_GETTEXT, j, (LPARAM)existing);
+                existing[255] = 0;
+                if (_tcscmp(existing, name.data()) == 0) { found = true; break; }
+            }
+            if (!found)
+                SendMessage(hList, LB_ADDSTRING, 0, (LPARAM)name.data());
+        }
     }
 }
 
@@ -989,49 +825,9 @@ INT_PTR CALLBACK MaterialSelectDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARA
             // Populate the list with available materials
             HWND hList = GetDlgItem(hWnd, IDC_MATERIALS_LIST);
             if (hList && mod && mod->ip) {
-                // First get materials from the material editor
-                const MtlBaseLib& editorMtlLib = mod->ip->GetMaterialLibrary();
-                DebugOutput(_T("Material Editor Library Count: %d\n"), editorMtlLib.Count());
-                
-                // Add each material from the editor to the list
-                for (int i = 0; i < editorMtlLib.Count(); i++) {
-                    MtlBase* mtl = editorMtlLib[i];
-                    if (mtl) {
-                        MSTR name = mtl->GetName();
-                        DebugOutput(_T("Adding editor material: %s\n"), name.data());
-                        SendMessage(hList, LB_ADDSTRING, 0, (LPARAM)name.data());
-                    }
-                }
-
-                // Then get materials from the scene
-                MtlBaseLib* sceneMtlLib = mod->ip->GetSceneMtls();
-                DebugOutput(_T("Scene Material Library Count: %d\n"), sceneMtlLib ? sceneMtlLib->Count() : 0);
-                
-                // Add each material from the scene to the list if not already added
-                if (sceneMtlLib) {
-                    for (int i = 0; i < sceneMtlLib->Count(); i++) {
-                        MtlBase* mtl = (*sceneMtlLib)[i];
-                        if (mtl) {
-                            MSTR name = mtl->GetName();
-                            // Check if this material is already in the list
-                            int count = SendMessage(hList, LB_GETCOUNT, 0, 0);
-                            bool found = false;
-                            for (int j = 0; j < count; j++) {
-                                TCHAR existingName[256] = { 0 };
-                                SendMessage(hList, LB_GETTEXT, j, (LPARAM)existingName);
-                                existingName[255] = 0; // Ensure null-termination
-                                if (_tcscmp(existingName, name.data()) == 0) {
-                                    found = true;
-                                    break;
-                                }
-                            }
-                            if (!found) {
-                                DebugOutput(_T("Adding scene material: %s\n"), name.data());
-                                SendMessage(hList, LB_ADDSTRING, 0, (LPARAM)name.data());
-                            }
-                        }
-                    }
-                }
+                TCHAR searchBuf[256] = { 0 };
+                GetWindowText(GetDlgItem(hWnd, IDC_MATERIAL_SEARCH), searchBuf, 256);
+                AddMaterialsToList(hList, mod->ip, searchBuf);
             }
 
             // Initialize the index spinner
@@ -1054,6 +850,17 @@ INT_PTR CALLBACK MaterialSelectDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARA
         return TRUE;
 
     case WM_COMMAND:
+        if (LOWORD(wParam) == IDC_MATERIAL_SEARCH && HIWORD(wParam) == EN_CHANGE) {
+            if (mod && mod->ip) {
+                HWND hList = GetDlgItem(hWnd, IDC_MATERIALS_LIST);
+                if (hList) {
+                    TCHAR searchBuf[256] = { 0 };
+                    GetWindowText(GetDlgItem(hWnd, IDC_MATERIAL_SEARCH), searchBuf, 256);
+                    AddMaterialsToList(hList, mod->ip, searchBuf);
+                }
+            }
+            return TRUE;
+        }
         if (LOWORD(wParam) == IDOK) {
             HWND hList = GetDlgItem(hWnd, IDC_MATERIALS_LIST);
             if (hList) {
@@ -1074,6 +881,7 @@ INT_PTR CALLBACK MaterialSelectDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARA
                         for (int i = 0; i < selCount; ++i) {
                             TCHAR buffer[256];
                             SendMessage(hList, LB_GETTEXT, selItems[i], (LPARAM)buffer);
+                            ReplaceSpacesWithUnderscores(buffer);
                             if (currentMaterials.Length() > 0) currentMaterials += _T(",");
                             currentMaterials += buffer;
                             currentMaterials += _T(":");
